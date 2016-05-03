@@ -1,0 +1,6 @@
+Program Analysis and Synthesis, Spring 2016, ETH Zurich
+
+## Project: Deep Learning for Programs
+
+We provide two scripts 'suggest.sh' and 'extract_histories.sh' that will be used to test your solution. You should update both scripts by following the instructions provided inside them and include them in your submission.
+
