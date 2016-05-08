@@ -1,0 +1,5 @@
+This file shall be a place for writing down questions and thoughts:
+_____
+Max:
+-The javascript_call_graph project ignores underscores in variable names. Doesn't this may cause serious problems?
+-It regards calls to new XMLHttpRequest() but not to other not existing objects. How does the project know?
