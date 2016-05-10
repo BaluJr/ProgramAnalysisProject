@@ -1,0 +1,26 @@
+Log file created at: 2016/05/10 17:58:56
+Running on machine: PA
+Log line format: [IWEF]mmdd hh:mm:ss.uuuuuu threadid file:line] msg
+I0510 17:58:56.552251  8722 main.cpp:42] Loading training data...
+I0510 17:58:56.555639  8722 tree.cpp:1966] Parsing done.
+I0510 17:58:56.555650  8722 tree.cpp:1973] Remaining trees after removing trees with more than 30000 nodes: 1
+I0510 17:58:56.555666  8722 main.cpp:45] Training data with 1 trees loaded.
+I0510 17:58:56.555745  8722 main.cpp:48] function()  {
+   var httpRequest;
+   document.getElementById("ajaxButton").onclick = function()  {
+      makeRequest("test.html");
+   }
+;
+   function makeRequest(url)  {
+      httpRequest = new XMLHttpRequest();
+      if (! httpRequest)  {
+         alert("Giving up :( Cannot create an XMLHTTP instance");
+         return false;
+      }
+      httpRequest.onreadystatechange = alertContents;
+      httpRequest.open("GET", url);
+      httpRequest.send();
+   }
+;
+}
+();
