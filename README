@@ -5,3 +5,25 @@ We provide two scripts 'suggest.sh' and 'extract_histories.sh' that will be used
 
 I just followed the basic project structure like downloaded from the PA site. I just added the .py files. Depending on the complexitiy we reach, we may introduce subfolders for each of the two subtasks HistoryExtraction and Suggestion.
 
+
+
+
+
+______
+History Creation Max:
+-> We always create the two interesting parts: Callgraph and AST -> What do we need the callgraph for? PointerAnalysis makes sense but the callgraph not!? 
+Which additional information does he have?
+ 
+ Another Question is: When we extract histories, do we do it per object? But then we could learn a network for each element separatly and the context would be more or less ignored.
+
+
+Learning approach Max:
+During setup of the histories we count each word in a dictionary. Elements that appear two rarely are dropped and replaced by UNKNOWN TOKEN:
+The others are added one after one into an mapping dictionary. 
+The oposite dictionary can be easily built.
+reverse_map = dict((reversed(item) for item in forward_map.items()))
+
+Good reference:
+http://www.wildml.com/2015/09/recurrent-neural-networks-tutorial-part-2-implementing-a-language-model-rnn-with-python-numpy-and-theano/
+
+Confirmed by Benjamin: The ID is the class name. When multiple APIs have same classes we are screwed.
