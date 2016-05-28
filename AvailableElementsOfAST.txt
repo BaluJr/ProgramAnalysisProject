@@ -1,0 +1,147 @@
+// List of all Elements I could find in the sourcecode of the AST parser
+// Here is also an explanation how each element is handled
+// Expressions always return a value. Expressions are allowed where statements are awaited
+// Sorted after the estree definition (merged together es5 )
+
+##########################
+########## ES5 ###########
+
+// ### Identifier -> Not handled
+Identifier
+
+
+
+
+
+// ### Programs: = Together with Statement
+Program -> Only process children
+
+// ### Statements ###
+ExpressionStatement -> Bridge between Expressions and Statements. Expressions are allowed where statements are possible -> Calc the expression
+BlockStatement -> Take all sub statements
+EmptyStatement -> The empty brackets after a function call, or also within the CaseStatment -> ignore
+DebuggerStatement -> Makes debugger wait: Can be ignored
+WithStatement  -> Can be ignored since handled by jscallgraph ->  Handle children
+
+// Control Flow
+>ReturnStatement -> One child is return value -> return value for current node
+>LabeledStatement -> controlflow ignore ? -> Ignore code with label jumps since bad practice ???
+>BreakStatement -> controlflow ignore
+>ContinueStatement -> controlflow ignore
+
+// Choice -> union of all executions
+>IfStatement -> when only "if then" two children: condition + body; with "else" part a third child with else body
+>SwitchStatement -> One child for test expression, one child per switch case (I tesed it: An test expression within the cases can alter data. And so the execution of the previous case tests belong to the history of later ones.)
+-> SwitchCase -> one child for value, one child for statement (if multiple instructions within one BlockStatement), BreakStatement included inside BlockStatement
+	The default only differs in that its test part has an emptyStatement -> Handle it immediatly together with SwitchStatement
+
+// Exceptions (add to history with additional specifier)
+>ThrowStatement
+>TryStatement
+-> CatchClause
+
+// Loops -> increase loop depth, add content to histories
+>WhileStatement -> 2 children, first is test
+>DoWhileStatement -> 2 children, also first is test
+>ForStatement -> 4 children, first the three in for header, last is body
+>ForInStatement -> 3 children: variable name, the enumerator to go through, and third is the body
+
+// ### Declarations ### = Together with Statement
+FunctionDeclaration -> children = function name + one per param + BlockStatement for Body (Ignoring when going through execution. Only interesting when Called!)
+VariableDeclaration -> Zusammen mit Variable Declarator, use for PointsTo Analyis
+>VariableDeclarator -> value = variable name, children is init value if exists
+
+
+
+
+
+// ### Expressions ####
+ThisExpression (Return of this) -> I realize this by a special entry in the l_env Parameter! Than lookup like normal variable
+ArrayExpression (an array statement [..,..,..] with one child per array element), -> handle as object
+ArrayAccess: new, not in standard, access to array (one child for array name, one for index)
+ObjectExpression -> The creation of an object using { ... }, one child per member called "property" with again one child with the expression for the value -> Create new elements in heap
+					Like always the value expressions have to be evaluated since they might change the history and do additional assignments
+FunctionExpression -> Creation of a function object. Handle like FunctionCreation with difference, that no name
+
+// Unary Operations -> handle only history
+>UnaryExpression ("-" | "+" | "!" | "~" | "typeof" | "void" | "delete") -> Ignore
+>UpdateExpression (i++, ++i, i += 3) -> Ignore
+
+// Binary Operations
+>BinaryExpression ( "==" | "!=" | "===" | "!==" | "<" | "<=" | ">" | ">=" | "<<" | ">>" 
+| ">>>" | "+" | "-" | "*" | "/" | "%" | "|" | "^" | "&" | "in" | "instanceof") -> Ignore besides the "|" for assignments
+>AssignmentExpression -> Assignment in history (pointer anaylsis)
+>LogicalExpression ( "||" | "&&") -> Ignore besides for assignment
+>MemberExpression -> normal call of class member (contains Identifier and Property), difference between computed style and identifier style
+                     Thinking about adding memberExpressions also to the history
+
+ConditionalExpression (ternary operator, 3 children: first is condition) -> Like IfStatement, but possibilities only expressions. handle like conditional with union but return value
+CallExpression -> Any FunctionCall, There are three different possible targets. The parameters are given as second child
+					FunctionExpression -> Handle immediatly
+					Identifier (=function name) -> look into callgraph, set function name and parameter names
+					MemberExpression -> look into callgraph, set set function name and parameter names
+NewExpression -> Create new part in history -> Create new element in pts
+SequenceExpression ->  (comma-separated sequence of expressions. more than one expression where JavaScript expects only one) 
+				       analyze all children, only last return value is returned
+
+
+
+##########################
+########## ES6 ###########
+# ignored in the first time since codebase will be older 
+
+// Statements
+ForOfStatment 
+
+// Declarations
+Usually additional statements for const, let etc. but we ignore it
+
+// Expressions
+(SpreadElement)
+ArrowFunctionExpression
+YieldExpression
+
+// Template Literals
+TemplateLiteral
+TaggedTemplateExpression ->
+TemplateElement
+
+// Pattern -> ignore
+ObjectPattern
+ArrayPattern
+RestElement
+AssignmentPattern
+
+// Classes
+ClassBody
+MethodDefinition -> Igone but use as jump target
+ClassDeclaration
+ClassExpression 
+
+// Modules
+ModuleDeclaration
+ModuleSpecifier
+Imports
+>ImportDeclaration
+>ImportSpecifier
+>ImportBatchSpecifier
+Exports
+>ExportDeclaration
+>ExportBatchSpecifier
+>ExportSpecifier
+
+
+
+
+
+#############################
+## NOT BELONGING TO Estree ##
+ParenthesizedExpression ->
+ComprehensionExpression ->
+ComprehensionBlock ->
+ScopeBody
+Property
+
+
+
+
