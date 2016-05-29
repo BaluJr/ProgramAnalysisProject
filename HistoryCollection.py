@@ -1,7 +1,6 @@
 import copy
 from enum import Enum
 
-
 #class SpecialTags(Enum):
 #    ic = 1 # If Condition
 #    sc = 2 # Switch Condition
@@ -9,6 +8,7 @@ from enum import Enum
 #    wc = 4 # WhileCondition
 #    fh = 5 # ForHeader
 #    ec = 6 # Condition of an ConditionalExpression
+#    on = 7 # When the code is executed in an on-Event
 
 
 class HistoryCollection(object):
@@ -43,7 +43,8 @@ class HistoryCollection(object):
         ''' Adds an event of an object to the history.
         Used within the nodes, where something is executed.
         The contextFunction is necessary to handle return statements- 
-        Special-tag  and loopDepth for the event are later determined by setting this value for the whole historyCollection
+        Special-tag  and loopDepth for the event are later determined by setting this value for the whole
+        historyCollection
         
         To get it right: This function is only used in nodes where execution happens, mostly child nodes. 
         In all other cases only the resulting HistoryCollections of the children are merged. Like this
@@ -57,14 +58,6 @@ class HistoryCollection(object):
         context:                The functionContext in which the event appeared. This is necessary to stop adding 
                                 to histories, that include already a return statement within the context of this function. 
         '''
-
-        #if obj in self.histories:
-        #    for hist in self.histories[obj]:
-        #        if not (hist[-1][1] == context and hist[-1][0] == ret):
-        #            hist.append((position, methodSignature, 0, "-")) 
-        #            #Für mehere Events käme hier extend(events)
-        #else:
-        #    self.histories[obj] = [[methodSignature]]
         self.histories.append((obj,methodSignature, position, contextFunction))
 
 
@@ -73,26 +66,19 @@ class HistoryCollection(object):
         If there are multiple histories for the same object do the 
         union, what means doing the crossproduct between the histories.
         Take care that deep copyies.
+        The deep encapsulation is necessary since each historyCollection might contain
+        additional information.
 
         Input: 
         historyCollection:  The other HistoryCollection, whose traces shall be 
                             appended to the own ones.
         """
-
-        #for id, newHistories in enumerate(historyCollection.getHistories()):
-        #    if self.histories[id]:
-        #        tmp = self.histories["id"]
-        #        self.histories[id] = []
-        #        for ownHist in tmp:
-        #            for newHist in newHistories:
-        #                cpOwnHist = copy.deepcopy(ownHist)
-        #                extendedHist.extend(newHist)
-        #                self.histories[id].append(extendedHist);
-        #    else:
-        #        self.histories[id] = histories
-
         if not historyCollection.isEmpty():
-            self.histories.append([historyCollection])
+           # if not historyCollection.loopBody and historyCollection.specialTag == "":
+           #     if not historyCollection.isEmpty():
+           #         self.histories.append((historyCollection.histories))
+           # else
+           self.histories.append([historyCollection])
 
 
     def addHistoriesConditional (self, historyCollections):
@@ -107,7 +93,7 @@ class HistoryCollection(object):
                             to histories, that include already a return within the context of this function.  
         """
         historyCollections = filter(lambda histCollection: histCollection.isEmpty(), historyCollections)
-        if len(historyCollections) != 0:   
+        if len(historyCollections) != 0:
             self.histories.append(historyCollections)
 
 
@@ -154,11 +140,11 @@ class HistoryCollection(object):
         
         # The result will be a map from an object to its history
         result = {}
-        for element in history:
+        for element in self.histories:
 
             # HistoryCollections to add for next Timestep
             # (crossproduct between all execution paths for each object for each parallel HistoryCollection)
-            if isinstance(lst, (list)):
+            if isinstance(element, (list)):
                 newHistories = {}
 
                 for historyCollection in element:
@@ -172,12 +158,18 @@ class HistoryCollection(object):
                             # For all but one (the last) the previous history has to be doubled
                             for concreteHistory in innerResult[object]:
                                 for concretePreviousHistory in result[object]:
-                                    newHistories[object].append(copy.deepCopy(concretePreviousHistory).extend(concreteHistory))
+                                    h =  copy.deepcopy(concretePreviousHistory)
+                                    h.extend(concreteHistory)
+                                    newHistories[object].append(h)
                         else:
                             newHistories[object].extend(innerResult[object])
 
+                # Keep the elements, whose histories were not expanded
+                for obj in set(result.keys())-set(newHistories.keys()):
+                    newHistories[obj] = result[obj]
+
                 # Optimization would be to not copy the last element but alter the already available histories in result
-                result = newHistories;
+                result = newHistories
 
             # Else single real Event :)
             else:
@@ -187,12 +179,12 @@ class HistoryCollection(object):
                 for obj in objs:
                     if obj in result:
                         for history in result[obj]:
-                            # Take care that events are not added, when in the
-                            # specific history already a ret appeared for that
-                            # function                           
+                            # Take care that events are not added, when in the specific
+                            # history already a ret appeared for that function
                             if not (history[-1][2] == "ret" and history[-1][1] == contextFn):
                                 history.append((functioname,pos,self.specialTag))
-                
+                    else:
+                        result[obj] = [[(functioname,pos,self.specialTag)]]
                                     
         return result
 

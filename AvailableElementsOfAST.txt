@@ -74,6 +74,7 @@ FunctionExpression -> Creation of a function object. Handle like FunctionCreatio
 >LogicalExpression ( "||" | "&&") -> Ignore besides for assignment
 >MemberExpression -> normal call of class member (contains Identifier and Property), difference between computed style and identifier style
                      Thinking about adding memberExpressions also to the history
+                     Always two children -> Element and field.
 
 ConditionalExpression (ternary operator, 3 children: first is condition) -> Like IfStatement, but possibilities only expressions. handle like conditional with union but return value
 CallExpression -> Any FunctionCall, There are three different possible targets. The parameters are given as second child

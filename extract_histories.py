@@ -17,28 +17,32 @@ from HistoryCollection import HistoryCollection
 # -Object appear at multiple positions...
 
 
+UseIsolatedCodejs = True
+
+
 class history_extractor:
-    aselst = None
-    callgraph = None
-    history = None
 
     def __init__(self, ast, callgraph):
         ''' Constructor immediatly sets ast and callgraph this extractor shall work on. 
         '''
         self.ast = ast
         self.callgraph = callgraph
-
+        self.history = None
+        self.outputHist = None
 
     def generateHistories(self):
         ''' Creates the history for the ast and callgraph given during initialization
         No input and no return.
         '''
-        hist, ret = self._analyseStatement(0, State());
+        state = State()
+        hist = self._analyseStatement(0, state)
         self.history = hist
+        self.outputHist = self.history.toOutputFormat(state)
+
         
 
-    def getHistoryString(self, astObjects):
-        ''' Returns the crated history
+    def getHistories(self, astObjects = None):
+        ''' Returns the created history
         Depending on whether specific nodes are given as parameter or not 
         it gives a list of those histories or a list of otherwise a list
         off all histories for all regarded classes.
@@ -50,9 +54,9 @@ class history_extractor:
         Return:
             hist:           History in the output format defined in the paper.
         '''
-        historyString = self.historyCollection.toOutputFormat(astObjects);
+
         # Number, which was used to distinguish between multiple elements is cut away sothat only class name remains.
-        return [(cur.rfind('-'), L[cur]) for cur in L] 
+        return self.outputHist #[(cur.rfind('-'), L[cur]) for cur in L]
 
 
     def _analyseStatement(self, nodeNumber, state):
@@ -85,7 +89,7 @@ class history_extractor:
         ### Analyse the Statements based on type
         if t == "ExpressionStatement":
             tmpHis, ret = self._analyseExpression(curNode["children"][0], state)
-            return tmpHis #Statements don't have a return value
+            return tmpHis
             
         elif t in ["Program","BlockStatement","WithStatement"]:
             if "children" in curNode:
@@ -98,15 +102,16 @@ class history_extractor:
         if t in ["EmptyStatement", "DebuggerStatement"]:
             return HistoryCollection()
 
-        # Control Flow (ignore completly)
+        # Control Flow (ignore completly, TODO)
         if t in ["BreakStatement", "ContinueStatement"]:
-            return HistoryCollection()#-> Handle later!
+            return HistoryCollection()
         elif t == "ReturnStatement": 
             # Extend the the "__return__" variable and add the "return" statement to the history.
-            hist, ret = self._analyseExpression(curNode["children"][0]["value"],state)
-            if ret: 
-                state.env_set["__return__"] = ret # Merging is done automatically
-                hist.addEventToHistory(ret, state.functionName,"ret", state.functionName)
+            hist, ret = self._analyseExpression(curNode["children"][0],state)
+            if ret:
+                returnObject = state.getTarget(ret)
+                state.env_set("__return__", returnObject)# Merging is done automatically
+                hist.addEventToHistory(returnObject, state.functionName,"ret", state.functionName)
             return hist
 
         # Choice
@@ -114,31 +119,32 @@ class history_extractor:
             hist, ret = self._analyseExpression(curNode["children"][0], state)
             hist.tagAsSpecialNode("ic")
             thenState = state.copy()
-            hist_then = self._analyseStatement(curNode["children"][0], thenState)
+            hist_then = self._analyseStatement(curNode["children"][1], thenState)
             elseState = state.copy()
-            hist_else = self._analyseStatement(curNode["children"][0], state.copy())
+            hist_else = self._analyseStatement(curNode["children"][2], elseState)
             state.mergeIn(thenState,elseState)
             hist.addHistoriesConditional([hist_then,hist_else], state.functionName)
 
         elif t == "SwitchStatement":
-            # TODO: At the moment the test expressions for the cases are ignored.
-            # Have to be added later taking into account, that for later cases all previous testexpressions have to be added to the history.
+            # TODO: for later cases all previous testexpressions have to be added to the history.
             hist, ret = self._analyseExpression(curNode["children"][0], state)
             hist.tagAsSpecialNode("sc")
             condHistories = []
             condStates = []
             for case in curNode["children"][1:]:
+                condStates.append(state.copy())
                 isDefault = len(case["children"]) == 1
                 if not isDefault:
-                    innerHist, ret = self._analyseExpression(case["children"][0], state)
+                    innerHist, ret = self._analyseExpression(case["children"][0], condStates[-1])
                     innerHist.tagAsSpecialNode("cc")
-                    tmpHist, ret = self._analyseStatement(case["children"][1], state)
+                    tmpHist, ret = self._analyseStatement(case["children"][1], condStates[-1])
                     innerHist.mergeHistoryCollections(tmpHist)
                 else:
                     # For default the statement is only child
-                    innerHist = self._analyseStatement(case["children"][0], state)
-                condHistories.append(tmpHist)
+                    innerHist = self._analyseStatement(case["children"][0], condStates[-1])
+                condHistories.append(innerHist)
             hist.addHistoriesConditional(condHistories)
+            state.mergeIn(condStates)
             return hist
         
         # Exceptions (ignored at the moment)
@@ -170,8 +176,7 @@ class history_extractor:
             hist.tagAsSpecialNode("fh")
             
             # Since we do not handle loops, immediatly assign all elements within the returned enumerable (Whether array or object does not matter because both in heap)
-            # Pay attention: the for in for an array only gives the indices!!!!
-            # SO NO IDEA HOW TO HANDLE -> maybe a special case
+            # TODO: the for in for an array only gives the indices!!!! NO IDEA HOW TO HANDLE -> maybe a special case
             tmpHist, ret =self._analyseExpression(curNode["children"][1], state)
             tmpHist.tagAsSpecialNode("fh")
             hist.addHistoryCollection(tmpHist)
@@ -217,6 +222,7 @@ class history_extractor:
                             a list of accessors. These two cases have to be handled separatly.
                             The parent statement/expression has to handle what to do with it. This is 
                             necessary to realize assignment statements properly.
+                            For variable list has one member. For MemberExpressions two.
         '''
     
         ### Get Statement and handle each type 
@@ -234,18 +240,16 @@ class history_extractor:
                   
         elif t == "ArrayExpression":
             # Handle as object (returning it as reference makes sense. Since also internally. Creat object and then return reference.)
-            state.newObject("array", 0, nodeNumber)
-            return newObject
+            newObj = state.newObject("array", 0, nodeNumber)
+            return HistoryCollection(), newObj
         elif t == "ArrayAccess":
             hist, leftRet = self._analyseExpression(curNode["children"][0], state)
             rightHist, rightRet = self._analyseExpression(curNode["children"][1], state) 
-            hist.addHistoryCollection(rightHist)      
-            # Here history is added to the pts on the left, Noch schauen ob Rückgabe als Pts oder string
-           ## ret  = state.heap_get(leftRet, rightRet) Das wird eben dort gemacht, wo man es braucht!
+            hist.addHistoryCollection(rightHist)
             return hist, [leftRet, rightRet]
         elif t == "ObjectExpression":
             obj = state.newObject("ObjectExpression", 0, nodeNumber) #Todo change TreeID
-            hist = HistoryCollection();
+            hist = HistoryCollection()
             for child in curNode["children"]:
                 prop = self.ast[child]
                 tmpHist, propertyValue = self._analyseExpression(prop["children"][0], state)
@@ -275,112 +279,127 @@ class history_extractor:
             
         elif t == "AssignmentExpression":
             # Execute expressions and assign right to left, AssignmentOperation missing in Parser!
+            # Good news: javascript gives error when callexpression on left site of assignment
+            # TODO: Then it is a "on..." Property -> Execute the functionExpression in Behind
             hist, leftRet = self._analyseExpression(curNode["children"][0], state)
-            rightHist, rightRet = self.analyseExpression(curNode["children"][1], state) 
+            rightHist, rightRet = self._analyseExpression(curNode["children"][1], state)
+            rightRet = state.getTarget(rightRet) # need only target
             hist.addHistoryCollection(rightHist)
-            
-            # So now I return the access pathes instead of the values themselves. Like this assignments are not possible to handle
-            if len(leftRet) == 1:
-                # When only a variable
-                state.env_set(leftRet, rightRet)
-            else:
-                # When multiple access pathes it has to be done over the heap (assume that program correct)
-                obj = state.env_get(leftRet)
-                for cur in leftRet[1:-1]:
-                    obj = state.heap_get(obj, cur)
-                state.heap_set(obj, rightRet)
+            if rightRet != None:
+                if len(leftRet) == 1:
+                    # When only a variable
+                    state.env_set(leftRet[0], rightRet)
+                else:
+                    # When two elements in list do over heap
+                    state.heap_add(leftRet[0],leftRet[1], rightRet)
             return hist, rightRet
+
         elif t == "LogicalExpression":
-            hist, leftRet = self.analyseExpression(curNode["children"][0], state)
-            rightHist, rightRet = self.analyseExpression(curNode["children"][1], state) 
+            hist, leftRet = self._analyseExpression(curNode["children"][0], state)
+            rightHist, rightRet = self._analyseExpression(curNode["children"][1], state)
             hist.addHistoryCollection(rightHist)
             # For an "or" both result values possible, for "and" only second
             if curNode["type"] == "||":
-                #TODO: leftRet um rightRet erweitern
-                pass
+                state.mergeObjects(state.getTarget(leftRet), state.getTarget(rightRet))
+                if (leftRet == None):
+                    return hist, rightRet
+                else:
+                    # If they were both != None, does not matter what to return since merged either way
+                    return hist, leftRet
             else:
-                # Hinterher anschauen: muss man da irgendwie gucken, ob None als condition?
-                return hist, state.getTarget(rightRet)
+                return hist, state.getTarget(rightRet) #If even more strage constructs -> Bad Luck
             
         elif t in "MemberExpression":
             hist, leftRet = self._analyseExpression(curNode["children"][0], state)
-            rightHist, rightRet = self._analyseExpression(curNode["children"][1], state) 
+            leftRet = state.getTarget(leftRet) # we use target
+            rightHist, rightRet = self._analyseExpression(curNode["children"][1], state)
+            rightRet = rightRet[0] # we use value
             hist.addHistoryCollection(rightHist)            
             hist.addEventToHistory(leftRet, rightRet, 0, state.functionName)
-            return hist, [item for sublist in [leftRet, rightRet] for item in sublist ] # flatten accessorlist
+            return hist, [leftRet, rightRet]
 
         elif t == "ConditionalExpression":
-            hist = self.analyseExpression(curNode["children"][0], state, curDepth)
+            hist = self._analyseExpression(curNode["children"][0], state)
             hist.tagAsSpecialNode("ic")
-            hist.addHistoryCollection(tmpHist)
-            hist_then, ret_then = self._analyseExpression(curNode["children"][0], state)
-            hist_else, ret_else = self._analyseExpression(curNode["children"][0], state)
+            state_then = state.copy()
+            hist_then, ret_then = self._analyseExpression(curNode["children"][0], stateThen)
+            state_else = state.copy()
+            hist_else, ret_else = self._analyseExpression(curNode["children"][0], stateElse)
             hist.addHistoryCollection([hist_then,hist_else]) 
+            state.mergeIn([state_then, state_else])
             # Does not matter whether return ret_then or ret_else, since already merged in state
             return hist, ret_else
 
         elif t == "CallExpression":
-            """ Arranges the function call. 
+            """ Most important element for histories! Arranges the function calls.
             Looks whether the designated function can be found using the callgraph.
-            The corresponding node is then called with env only set to the parameters. 
-            
+            The corresponding node is then called with env only set to the parameters.
             Functions from FunctionExpressions are exactly identically referenced by callgraph as 
             the functions from FunctionDeclaration. Only difference: Expression has no first child 
             with name.
-
             The special fields "state.context" and "state.functionName" are additonal information 
             stored in the environment needed for calculation!
             """   
             
             if (self.ast[curNode["children"][0]]["type"] == "FunctionExpression"):
-                # Set the function  
+                # Set the function  (in this case salways available)
                 fnNode = self.ast[curNode["children"][0]]
 
                 # Create the subfunction context   
                 subfunctionState = state.prepareForSubfunction(state.context, "anonym"+str(nodeNumber))
-                for i, param in enumerate(curNode["children"][1:-1]):
-                    tmpHist, tmpRet = self._analyseExpression(param, state)
-                    hist.addHistoryCollection(tmpHist)    
+                for i, param in enumerate(curNode["children"][1:]):
+                    hist, tmpRet = self._analyseExpression(param, state)
                     subfunctionState.env_set(fnNode["children"][i+1]["value"],tmpRet)
 
             elif  (self.ast[curNode["children"][0]]["type"] == "MemberExpression"):
-                # Immediatly handled here, because necessary to set the context
-                hist, leftRet = self._analyseExpression(curNode["children"][0], state)
-                rightHist, rightRet = self._analyseExpression(curNode["children"][1], state) 
-                hist.addHistoryCollection(rightHist)      
+                hist, ret = self._analyseExpression(curNode["children"][0], state)
                 
-                # Set the function             
-                fnNode = self.ast[self.callgraph[curNode["id"]]]
+                # Set the function (at the moment ignore document and window links)
+                if not curNode["id"] in self.callgraph or not isinstance(self.callgraph[curNode["id"]],int):
+                    newObj = state.newObject("anonymous", 0,curNode["id"])
+                    hist.addEventToHistory(newObj, ret[-1], "ret", state.functionName)
+                    return hist, newObj
 
-                # Create the subfunction context   
-                newState = state.prepareForSubfunction(leftRet, rightRet)
-                for i, param in enumerate(curNode["children"][1:-1]):
-                    tmpHist, tmpRet = self._analyseExpression(param, state)
+                # Otherwise set the function and functioncontext
+                fnNode = self.ast[self.callgraph[curNode["id"]]]
+                subfunctionState = state.prepareForSubfunction(state.getTarget(ret[:-1]), ret[-1])
+                for i, param in enumerate(curNode["children"][1:]):
+                    tmpHist, tmpRet = self._analyseExpression(param, subfunctionState)
                     hist.addHistoryCollection(tmpHist)    
                     subfunctionState.env_set(fnNode["children"][i+1]["value"],tmpRet)
 
-            elif (self.curNode["children"][0]["type"] == "Identifier"):                  
-                # Set the function             
+            elif (self.ast[curNode["children"][0]]["type"] == "Identifier"):
+                hist = HistoryCollection()
+
+                # When no callinformation, only add event to history and create potential object
+                if not curNode["id"] in self.callgraph or not isinstance(self.callgraph[curNode["id"]],int):
+                    newObj = state.newObject("anonymous", 0, curNode["id"])
+                    hist.addEventToHistory(newObj,curNode["children"][0]["type"],"ret",state.functionName)
+                    return hist, newObj
+
+                # Otherwise set the function and functioncontext
                 fnNode = self.ast[self.callgraph[curNode["id"]]]
-              
-                # Create the subfunction context   
-                subfunctionState = state.prepareForSubfunction(state.context, curNode["children"][0]["value"])
-                for i, param in enumerate(curNode["children"][1:-1]):
+                subfunctionState = state.prepareForSubfunction(state.context, self.ast[curNode["children"][0]]["value"])
+                for i, param in enumerate(curNode["children"][1:]):
                     tmpHist, tmpRet = self._analyseExpression(param, state)
-                    hist.addHistoryCollection(tmpHist)    
-                    subfunctionState.env_set(fnNode["children"][i+1]["value"],tmpRet)
+                    hist.addHistoryCollection(tmpHist)
+                    tmpRet = state.getTarget(tmpRet)
+                    parameterName = self.ast[fnNode["children"][i+1]]["value"]
+                    subfunctionState.env_createLocal(parameterName)
+                    subfunctionState.env_set(parameterName,tmpRet)
 
             else:
                 raise("CallExpression has a unknown child for node" + nodeNumber);
             
 
             # Execute the functions blockstatement (last child)
-            fnHist, ret = self._analyseStatement(fnNode["children"][-1], subfunctionState)
+            fnHist = self._analyseStatement(fnNode["children"][-1], subfunctionState)
             hist.addHistoryCollection(fnHist)
+            ret = subfunctionState.env_get("__return__")
             return hist, ret
 
         elif t == "NewExpression":
-            return state.newObject(self.ast[curNode["children"][0]]["value"], nodeNumber)
+            return HistoryCollection(), state.newObject(self.ast[curNode["children"][0]]["value"], 0, nodeNumber)
             
         elif t == "SequenceExpression":
             # Multiple expressions. 
@@ -463,70 +482,78 @@ def prepare_files(astFilePath):
         });
         return ast;
     } """
-    
-    # Parse the AST
+
+    # 0) If javascriptcode given instead AST -> Create ast-file to use default behaviour afterwards and use that astFilePath
+    if (UseIsolatedCodejs):
+        # javascriptcode given -> Generate ast and save as file
+        p0 = Popen(["/home/pa/Desktop/js_parser/bin/js_parser.js",
+                    "/home/pa/Desktop/Repository/ProgramAnalysisProject/tests_histories/IsolatedCode.js"]
+                    , stdout=PIPE)
+        genAst = p0.stdout.read().decode("utf-8")
+        astFilePath = "/home/pa/Desktop/Repository/ProgramAnalysisProject/tests_histories/isolatedCode_programs.json"
+        text_file = open(astFilePath, "w")
+        text_file.write(genAst)
+        text_file.close()
+
+
+
+
+    # A) Parse the AST
     astFile = open(astFilePath, "r")
     astString = astFile.read()
     ast = json.loads(astString,"r" )
 
-
-    # Reconstuct the javascript code by saving to file and
+    # B) Reconstruct the code from AST
     p1 = Popen(["/home/pa/Desktop/json_printer/bin/syntree/main", "--num_data_records=1",
-                "--data=/home/pa/Desktop/Repository/ProgramAnalysisProject/tests_histories/programs.json",
+                "--data=" + astFilePath,
                 "--logtostderr"], stderr=PIPE)
-    jscode = p.stderr.read()
-
-    filteredJscode= []
-    for i,line in jscode.split("\n"):
-       if (line.startswith("I0510")):
-           filteredJscode.add(line);
-    jscode = ''.join(filteredJscode)
-    #jscode = "(function()  {\nvar httpRequest;\ndocument.getElementById(\"ajaxButton\").onclick = (function()  {\nmakeRequest(\"test.html\");\n}\n);\nfunction makeRequest(url)  {\nhttpRequest = new XMLHttpRequest();\nif (! httpRequest)  {\nalert(\"Giving up :( Cannot create an XMLHTTP instance\");\nreturn false;\n}\nhttpRequest.onreadystatechange = alertContents;\nhttpRequest.open(\"GET\", url);\nhttpRequest.send();\n}\n;\n}\n)();"
-
-    jscodeLinePositions = [0]
+    jscode = p1.stderr.read().decode("utf-8")
+    filteredJscode = []
+    jscodeLinePositions = [-1]
     for line in jscode.split("\n"):
-        jscodeLinePositions.append(jscodeLinePositions[-1] + len(line)+2) # PAY ATTENTION +2 bcause of \n Don'T know whether necessary when executing real commands
-
+        if not (line.startswith("I0")):
+            filteredJscode.append(line)
+            jscodeLinePositions.append(jscodeLinePositions[-1] + len(line) + 1) # add 1 for missing newline
+    jscode = '\n'.join(filteredJscode)
+    jscodeLinePositions[0] = 0 # I HAVE ABSOLUTLY NO CLUE, WHY THE MAPPING IS THAT STRANGE AND THERE IS ALWAYS AN OFFSET OF 1
    
-    # Get the mapping from astElements to position in jscode
+    # C) Get the mapping from position in sourcefile to astNode by analysing the node
     p2 = Popen(["/home/pa/Desktop/json_printer/bin/syntree/main", "--num_data_records=1",
-                "--data=/home/pa/Desktop/Repository/ProgramAnalysisProject/tests_histories/programs.json",
+                "--data=" + astFilePath,
                 "--mode=info", "--logtostderr"], stderr=PIPE)
-
-    astToCodeMapping = p2.stderr.read()
-    #astToCodeMapping = "Log file created at: 2016/05/28 07:15:13\nRunning on machine: PA\nLog line format: [IWEF]mmdd hh:mm:ss.uuuuuu threadid file:line] msg\nI0528 07:15:13.073760 10443 main.cpp:47] Loading training data...\nI0528 07:15:13.075572 10443 tree.cpp:2010] Parsing done.\nI0528 07:15:13.075584 10443 tree.cpp:2017] Remaining trees after removing trees with more than 30000 nodes: 1\nI0528 07:15:13.075603 10443 main.cpp:50] Training data with 1 trees loaded.\nI0528 07:15:13.075713 10443 main.cpp:62] 0 1 1\nI0528 07:15:13.075716 10443 main.cpp:62] 1 1 1\nI0528 07:15:13.075719 10443 main.cpp:62] 2 1 1\nI0528 07:15:13.075721 10443 main.cpp:62] 3 1 1\nI0528 07:15:13.075723 10443 main.cpp:62] 4 1 13\nI0528 07:15:13.075726 10443 main.cpp:62] 5 2 4\nI0528 07:15:13.075728 10443 main.cpp:62] 6 2 8\nI0528 07:15:13.075731 10443 main.cpp:62] 7 3 4\nI0528 07:15:13.075732 10443 main.cpp:62] 8 3 4\nI0528 07:15:13.075736 10443 main.cpp:62] 9 3 4\nI0528 07:15:13.075737 10443 main.cpp:62] 10 3 4\nI0528 07:15:13.075739 10443 main.cpp:62] 11 3 4\nI0528 07:15:13.075742 10443 main.cpp:62] 12 3 4\nI0528 07:15:13.075744 10443 main.cpp:62] 13 3 13\nI0528 07:15:13.075747 10443 main.cpp:62] 14 3 28\nI0528 07:15:13.075749 10443 main.cpp:62] 15 3 42\nI0528 07:15:13.075752 10443 main.cpp:62] 16 3 52\nI0528 07:15:13.075753 10443 main.cpp:62] 17 3 64\nI0528 07:15:13.075755 10443 main.cpp:62] 18 4 7\nI0528 07:15:13.075758 10443 main.cpp:62] 19 4 7\nI0528 07:15:13.075760 10443 main.cpp:62] 20 4 7\nI0528 07:15:13.075762 10443 main.cpp:62] 21 4 19\nI0528 07:15:13.075765 10443 main.cpp:62] 22 7 4\nI0528 07:15:13.075767 10443 main.cpp:62] 23 7 13\nI0528 07:15:13.075769 10443 main.cpp:62] 24 7 25\nI0528 07:15:13.075772 10443 main.cpp:62] 25 7 30\nI0528 07:15:13.075774 10443 main.cpp:62] 26 8 7\nI0528 07:15:13.075776 10443 main.cpp:62] 27 8 7\nI0528 07:15:13.075778 10443 main.cpp:62] 28 8 7\nI0528 07:15:13.075780 10443 main.cpp:62] 29 8 21\nI0528 07:15:13.075783 10443 main.cpp:62] 30 8 25\nI0528 07:15:13.075785 10443 main.cpp:62] 31 9 7\nI0528 07:15:13.075788 10443 main.cpp:62] 32 9 11\nI0528 07:15:13.075790 10443 main.cpp:62] 33 9 13\nI0528 07:15:13.075793 10443 main.cpp:62] 34 9 26\nI0528 07:15:13.075794 10443 main.cpp:62] 35 10 10\nI0528 07:15:13.075798 10443 main.cpp:62] 36 10 10\nI0528 07:15:13.075799 10443 main.cpp:62] 37 10 10\nI0528 07:15:13.075801 10443 main.cpp:62] 38 10 16\nI0528 07:15:13.075803 10443 main.cpp:62] 39 11 10\nI0528 07:15:13.075806 10443 main.cpp:62] 40 11 17\nI0528 07:15:13.075809 10443 main.cpp:62] 41 13 7\nI0528 07:15:13.075810 10443 main.cpp:62] 42 13 7\nI0528 07:15:13.075814 10443 main.cpp:62] 43 13 7\nI0528 07:15:13.075815 10443 main.cpp:62] 44 13 7\nI0528 07:15:13.075817 10443 main.cpp:62] 45 13 19\nI0528 07:15:13.075819 10443 main.cpp:62] 46 13 40\nI0528 07:15:13.075822 10443 main.cpp:62] 47 14 7\nI0528 07:15:13.075824 10443 main.cpp:62] 48 14 7\nI0528 07:15:13.075826 10443 main.cpp:62] 49 14 7\nI0528 07:15:13.075829 10443 main.cpp:62] 50 14 7\nI0528 07:15:13.075831 10443 main.cpp:62] 51 14 19\nI0528 07:15:13.075834 10443 main.cpp:62] 52 14 24\nI0528 07:15:13.075835 10443 main.cpp:62] 53 14 31\nI0528 07:15:13.075839 10443 main.cpp:62] 54 15 7\nI0528 07:15:13.075840 10443 main.cpp:62] 55 15 7\nI0528 07:15:13.075842 10443 main.cpp:62] 56 15 7\nI0528 07:15:13.075845 10443 main.cpp:62] 57 15 7\nI0528 07:15:13.075847 10443 main.cpp:62] 58 15 19\n"
-   
-    astToCodeMappingSplitted = astToCodeMapping.split("\n")[7:]
-    astToCodeMapping = []
-    for line in astToCodeMappingSplitted:
-        astToCodeMapping.append([int(x) for x in line[line.find("]")+2:].split()[1:] ])
-
-
-    mapping = {} # {1: 3, 38: 10, 86: 16, 105: 19, 136: 22, 232: 36, 354: 48, 385: 55}
+    rawAstToCodeMapping = p2.stderr.read().decode("utf-8").split("\n")[4:]
+    processedAstToCodeMapping = []
+    for line in rawAstToCodeMapping:
+        processedAstToCodeMapping.append([int(x) for x in line[line.find("]")+2:].split()[1:] ])
+    mapping = {}
     for node in ast[:-1]:
         if node["type"] in ["FunctionExpression", "FunctionDeclaration", "CallExpression"]:
-            position = astToCodeMapping[node["id"]]
+            position = processedAstToCodeMapping[node["id"]]
             mapping[jscodeLinePositions[position[0]-1] + position[1]] = node["id"]
-            
 
-
-    # Preprocess the reconstructed javascript code -> remove log lines etc.
-    #q = Popen(["node /home/pa/Desktop/js_call_graph/javascript-call-graph/main.js", "--cg", jscode], stdout=PIPE)
-    #callgraph = p.stdout.read()
-    callgraph = "IsolatedCode.js@1:1-468 -> IsolatedCode.js@1:1-464\nIsolatedCode.js@3:38-75 -> Document_prototype_getElementById\nIsolatedCode.js@4:107-131 -> IsolatedCode.js@7:144-460\nIsolatedCode.js@8:193-213 -> XMLHttpRequest\nIsolatedCode.js@10:252-307 -> Window_prototype_alert\nIsolatedCode.js@14:400-428 -> Window_prototype_open\nIsolatedCode.js@14:400-428 -> XMLHttpRequest_prototype_open\nIsolatedCode.js@15:436-454 -> XMLHttpRequest_prototype_send\n"
-
+    # D) Create the callgraph with the AST nodes as entries
+    q = Popen(["node", "/home/pa/Desktop/js_call_graph/javascript-call-graph/main.js", "--cg", jscode], stdout=PIPE)
+    callgraph = q.stdout.read().decode("utf-8")
     mappedCallgraph = {}
     for line in callgraph.split("\n"):
+        if not "->" in line:
+            continue
         caller, target = line.split(" -> ")
-        caller = mapping[ int(caller[caller.find(":")+1:caller.find("-") ]) ]
-        if "@" in target:           
-            target = mapping[ int(target[target.find(":")+1:target.find("-") ] )]
+        callerPos = int(caller[caller.find(":")+1:caller.find("-") ])
+        if not callerPos in mapping:
+            continue
+        caller = mapping[ callerPos ]
+        if "@" in target:
+            targetPos = int(target[target.find(":")+1:target.find("-") ] )
+            if not targetPos in mapping:
+                continue
+            target = mapping[targetPos]
         mappedCallgraph[caller] = target
 
     return ast, mappedCallgraph
         
 
-def extract_histories(astsFilePath, testsFilePath):
+def extract_histories(astsFilePath, testsFilePath = None):
     """ Extracts histories available in the designated files.
 
     Input:
@@ -536,14 +563,20 @@ def extract_histories(astsFilePath, testsFilePath):
     Output:
     histories:      List of history objects as a string, formatted like in the paper
     """
-    testFile = open(testFilePath, "r")
+
     # Get the corresponding callgraph 
     ast, callgraph = prepare_files(astsFilePath)
     
     # Analyse the given ast with help of the callgraph and return result
     hist_extractor = history_extractor(ast, callgraph)
-    hist_extractor.generateHistories()    
-    historiesString = hist_extractor.getHistoryString()
+    hist_extractor.generateHistories()
+
+    # Get the histories
+    tests = None
+    if testsFilePath != None:
+        tests = open(testFilePath, "r").read().split("\n")
+    historiesString = hist_extractor.getHistories(tests)
+
     return historiesString
 
 
@@ -566,10 +599,10 @@ if __name__ == "__main__":
     testFilePath = sys.argv[2]
 
     # Here it could be reasonable to handle ASTs of the same project at the same time
-    histories = extract_histories(astFilePath,testFilePath)
+    histories = extract_histories(astFilePath)
 
     # Write the histories
-    resultPath = os.path.basename(astFilePath) + "/ResultingHistories"
-    histFile = open(resultPath, "rw")
-    for hist in histories:
-        histFile.write(hist + "\n")
+    resultPath = os.path.dirname(astFilePath) + "/ResultingHistories"
+    histFile = open(resultPath, "w+")
+    #for hist in histories:
+    #   histFile.write(hist + "\n")

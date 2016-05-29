@@ -6,8 +6,8 @@
 # Hist uach einfach die referenzen nimmt, die sie rein bekommt. Dh wir brauchen die folgenden Funktionen:
 #
 # newObject(class):             Gibt einen eindeutigen Namen für ein neues Objekt der Klasse zurück. Interner Counter für Nummerierung (Integer Overflow nicht behandelt)
-# _getMostAbstractObject(obj):  Gibt für ein Objekt das abstrakteste zurück (Das ist nur intern da von aussen nicht gebraucht. Getter geben alle automatisch das abstrakteste aus
-# _getConcreteObjects           Gibt für ein Objekt alle enthaltenen Konkreten zurück. (Das wird nur gebraucht (Braucht man auch nur intern)
+# getAbstractObject(obj):  Gibt für ein Objekt das abstrakteste zurück (Das ist nur intern da von aussen nicht gebraucht. Getter geben alle automatisch das abstrakteste aus
+# getConcreteObjects           Gibt für ein Objekt alle enthaltenen Konkreten zurück. (Das wird nur gebraucht (Braucht man auch nur intern)
 # getAbstractToConcreteMapping: Das ist quasi die ausgabefunktion, die am ende noch ausgegeben wird und der Historybildung mit auf den Weg gegeben wird! :)
 #
 # heap_Add(obj, fiel, target): Fügt link hinzu. Wenn es das schon im Heap gibt, wird target und das vorherige Objekt automatisch gemerged
@@ -43,12 +43,12 @@ class State(object):
 
         # From HEAP  
         # The mapping of object/array fields to objects. Handles the references to the other objects.
-        self.heap = {}
+        self.heap = {"window-0:0": {}, "document-0:0": {}}
         
         # From ENV
         # Environment is split into the local and global one
         self.localEnvironment = {}
-        self.globalEnvironment = {"window": {}, "document": {}, "__this__": {}} #Muss mir noch ueberlegen wie ich window und global vereinheitliche
+        self.globalEnvironment = {"window": "window-0:0", "document": "document-0:0", "__this__": "window-0:0"} #Muss mir noch ueberlegen wie ich window und global vereinheitliche
         # Two special fields necessary for administration
         self.functionName = None
         self.context = "window"
@@ -73,7 +73,9 @@ class State(object):
         Output:
             objName:        "objectClass_astId:astNodeId"
         '''
-        return objectClass + "_" + astId + ":" + astNodeId
+        name =  objectClass + "_" + str(astId) + ":" + str(astNodeId)
+        self.heap[name] = {}
+        return name
 
 
 
@@ -89,24 +91,32 @@ class State(object):
         Input:
             obj1:   The identifier of the first object to merge.
             obj2:   The identifier of the second object to merge.
+
+        Return:
+            newObj: The name of the newly created object
         """
+
+        if obj1 == None or obj2 == None:
+            return
+
 
         # First determine which objects have to be merged
         mappings = {obj1: obj1+obj2, obj2: obj1+obj2}
-        mergings = [(obj1+obj2, set(obj1, obj2))]
-        newMergings = [set(obj1, obj2)] #, obj...)], set(obj3, obj9)]
+        mergings = [(obj1+obj2, set([obj1, obj2]))]
+        newMergings = [set([obj1, obj2])] #, obj...)], set(obj3, obj9)]
         # Go through all new 
         while newMergings:
             # Note the merge of the objects
             for newMerging in newMergings:
                 fieldValues = {} # from field to set
                 for obj in newMerging:
-                    for field in heap[newMerging]:
+                    for field in self.heap[obj]:
                         if not field in fieldValues:
-                            fieldValues[field] = set(heap[newMerging][field])
+                            fieldValues[field] = set(self.heap[obj][field])
                         else:
-                            fieldValues[field].add(heap[newMerging][field])
-
+                            fieldValues[field].add(self.heap[obj][field])
+            # Look whether this merging causes a new merging
+            newMergings = []
             for field in fieldValues:
                 if len(fieldValues[field]) > 1:
                     newMergings.append(fieldValues[field])
@@ -114,8 +124,8 @@ class State(object):
         # Then do the merging
         for merging in mergings:
             newObj = {}
-            for prevObj in merging[2]:
-                for field in prevObj:
+            for prevObj in merging[1]:
+                for field in self.heap[prevObj]:
                     if prevObj[field] in mappings:
                         target = mappings[prevObj[field]]
                     else:
@@ -123,10 +133,12 @@ class State(object):
                     newObj["field"] = target
         # Remember the new mappings in the official mapping list
         for mapping in mappings:
-            objects[mapping] = mappings[mapping]
+            self.objectToMoreAbstractObject[mapping] = mappings[mapping]
+
+        return "ChangeMEE"
 
 
-    def _getAbstractObject(self, obj):
+    def getAbstractObject(self, obj):
         """ Returns the name of the most abstract object, the given object has been merged into.
         This works as a recursive search. For each concrete and abstract object the id of the 
         next abstract object is stored, into which it has been merged. 
@@ -134,12 +146,15 @@ class State(object):
         Input: 
             obj:    The object for which we want to get the most abstract 
         """
-        while (obj in self.objects):
-            obj = self.objects[obj]
+        if obj == None:
+            return None
+
+        while (obj in self.objectToMoreAbstractObject):
+            obj = self.objectToMoreAbstractObject[obj]
         return obj
 
     
-    def _getConcreteObjects(self, obj):
+    def getConcreteObjects(self, obj):
         """ Returns the list ob concrete objects, abstracted by the 
         given abstract object 
         
@@ -150,16 +165,14 @@ class State(object):
             concreteObjs:   List of the concrete objects, abstracted by this 
                             object
         """
-        if obj in mostAbstractObjectToObjects:
-            return mostAbstractObjectToObjects[obj]
-        elif obj in intermediateAbstractObjectToObjects:
-            return intermediateAbstractObjectToObjects[obj]
+        if obj in self.abstractObjectToObjects:
+            return self.abstractObjectToObjects[obj]
         else:
             # The object is not abstract
-            return obj
+            return [obj]
 
 
-    def getTarget(self, accessorString):
+    def getTarget(self, accessorList):
         """ Returns the returning value for a concatenation of accessors
         This has been introduced in the very end since was necessary for 
         eg. assignment, that the accessor lists are returned and not the 
@@ -172,16 +185,16 @@ class State(object):
         Einzelobjekt wenn es keine Liste ist!
         """
         # when already an object is given
-        if not isinstance(accessorString, (accessorString)):
-            return accessorString
+        if not isinstance(accessorList, (list)):
+            return accessorList
 
-        if len(accessorString) == 0:
-            return env_get(accessorString[0])
+        if len(accessorList) == 1:
+            return self.env_get(accessorList[0])
         else:
-            obj = state.env_get(accessorString[0])
-            for cur in accessorString[1:-1]:
+            obj = self.env_get(accessorList[0])
+            for cur in accessorList[1:-1]:
                 obj = state.heap_get(obj, cur)
-            return self.heap_get(obj, accessorString[-1])
+            return self.heap_get(obj, accessorList[-1])
 
 
 
@@ -219,7 +232,7 @@ class State(object):
         """
         # Add to the local dictionary of objects
         if obj in self.heap and field in self.heap[obj]:
-            return self._getAbstractObject(self.heap[obj])
+            return self.getAbstractObject(self.heap[obj])
         else:
             return None
 
@@ -242,9 +255,9 @@ class State(object):
         '''
 
         if var in self.localEnvironment:
-            return self._getAbstractObject(self.localEnvironment[var])
+            return self.getAbstractObject(self.localEnvironment[var])
         elif var in self.globalEnvironment:
-            return self._getAbstractObject(self.globalEnvironment[var])
+            return self.getAbstractObject(self.globalEnvironment[var])
         else:
             return None
 
@@ -268,9 +281,17 @@ class State(object):
             val:    The value to sbe assigned to the variable.
         '''
         if var in self.localEnvironment:
-            self.localEnvironment[var] = val
+            if self.localEnvironment[var] != None:
+                # Ok to keep the old link, since recursive search handles it.
+                newObj = self.mergeObjects(self.localEnvironment[var], val)
+            else:
+                self.localEnvironment[val]
         else:
-            self.globalEnvironment[var] = val
+            if var in self.globalEnvironment and self.globalEnvironment[var] != None:
+                # Ok to keep the old link, since recursive search handles it.
+                newObj = self.mergeObjects(self.globalEnvironment[var], val)
+            else:
+                self.globalEnvironment[var] = val
 
 
 
@@ -303,6 +324,7 @@ class State(object):
         subfunctionState.heap = self.heap
         subfunctionState.functionName = functionName
         subfunctionState.context = functionContext
+        subfunctionState.env_createLocal("__return__")
         return subfunctionState
 
 
@@ -352,10 +374,10 @@ class State(object):
         # Here the magic happens. When we merge here, all the references above will also point to these objects
         for newState in newStates:
             for abstrObj in newState.mostAbstractObjectToObjects:
-                concObjsSet = newState._getConcreteObj(abstrObj)
+                concObjsSet = newState.getConcreteObjects(abstrObj)
                 for concObj in concObjsSet:
-                    prevAbstrObj = self._getAbstractObject(concObj)
-                    objsToMerge = concObjSet - self._getConcreteObjects(prevAbstrObj)
+                    prevAbstrObj = self.getAbstractObject(concObj)
+                    objsToMerge = concObjsSet - self.getConcreteObjects(prevAbstrObj)
                     for objToMerge in objsToMerge:
                         self.mergeObjects(prevAbstrObj, objToMerge)
             self.mostAbstractObjectToObjects.update(abstrObj)
