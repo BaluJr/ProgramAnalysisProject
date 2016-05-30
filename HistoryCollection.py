@@ -1,6 +1,6 @@
 import copy
-from enum import Enum
 
+#from enum import Enum
 #class SpecialTags(Enum):
 #    ic = 1 # If Condition
 #    sc = 2 # Switch Condition
@@ -35,7 +35,7 @@ class HistoryCollection(object):
 
         # This attribute notes, whether this history is placed at a special position. So during history generation, this
         # special information can be included into the histories if desired.
-        self.specialTag = ""
+        self.specialTag = "-"
 
  
 
@@ -74,10 +74,6 @@ class HistoryCollection(object):
                             appended to the own ones.
         """
         if not historyCollection.isEmpty():
-           # if not historyCollection.loopBody and historyCollection.specialTag == "":
-           #     if not historyCollection.isEmpty():
-           #         self.histories.append((historyCollection.histories))
-           # else
            self.histories.append([historyCollection])
 
 
@@ -89,12 +85,19 @@ class HistoryCollection(object):
         Input: 
         historyCollection:  List of HistoryCollection, whose traces shall be 
                             appended to the own ones.
-        context:    TODO    The functionContext in which the event appeared. This is necessary to stop adding 
-                            to histories, that include already a return within the context of this function.  
         """
-        historyCollections = filter(lambda histCollection: histCollection.isEmpty(), historyCollections)
-        if len(historyCollections) != 0:
-            self.histories.append(historyCollections)
+        emptyHistFound = False
+        filteredCollection = []
+        for hist in historyCollections:
+            if not hist.isEmpty():
+                filteredCollection.append(hist)
+            else:
+                emptyHistFound = True
+        if emptyHistFound:
+            filteredCollection.append(HistoryCollection())
+
+        if len(filteredCollection) >= 2:
+            self.histories.append(filteredCollection)
 
 
     def tagAsSpecialNode(self, tag):
@@ -118,6 +121,31 @@ class HistoryCollection(object):
 
 
     def toOutputFormat(self, objectCollection):
+        """ Do the postprocessing for created history
+        Remove empty results and anonymous objecs, that were not used.
+        """
+        history = self._toOutputFormatInner(objectCollection, 0)
+
+        # Remove empty traces
+        for obj in history:
+            history[obj] = [concreteTrace for concreteTrace in history[obj] if len(concreteTrace) > 0]
+
+        # Remove unused anonymous objects
+        resultHistory = {}
+        for obj in history: #TODO PROLEM!
+            if not obj.startswith("anonymous"):
+                resultHistory[obj] = history[obj]
+            else:
+                # anonymous objects, that are used are kept
+                for concreteTrace in history[obj]:
+                    if (len(concreteTrace) > 1):
+                        resultHistory[obj] = history[obj]
+                        continue
+
+        return resultHistory
+
+
+    def _toOutputFormatInner(self, objectCollection, loopdepth):
         """ Returns the created histories in the required format.
         This can be understood as the output function of the history. Since the 
         HistoryCollection only holds as few data as possible during runtime, 
@@ -128,6 +156,7 @@ class HistoryCollection(object):
             objectCollection:   The histories always reference the abstract objects. Therefore
                                 the objectCollection has to be given to be capable to add the history 
                                 elements to the true atomar objects.
+            loopdepth:          To set the looping depth properly
         
         Output:
             histories:          {objectname : [all its histories]} where each history is a list 
@@ -136,8 +165,15 @@ class HistoryCollection(object):
                                 name plus an additional "_number". To finally get the histories for API 
                                 Classes, this has to be removed.
         """
-        
-        
+
+        # When no events here, at least return empty history for handling cases
+        if len(self.histories) == 0:
+            return {}
+
+        # For all further calculations set loopdepth one deeper
+        if (self.loopBody):
+            loopdepth = loopdepth + 1
+
         # The result will be a map from an object to its history
         result = {}
         for element in self.histories:
@@ -147,31 +183,44 @@ class HistoryCollection(object):
             if isinstance(element, (list)):
                 newHistories = {}
 
+                # First gather all inner results to collect all objects (necessary for not handled cases)
+                objects = set(result.keys())
+                innerResults = []
                 for historyCollection in element:
-                    innerResult = historyCollection.toOutputFormat(objectCollection)
-                    for object in innerResult:
-                        if not object in newHistories:
-                            newHistories[object] = []
+                    innerResults.append(historyCollection._toOutputFormatInner(objectCollection, loopdepth))
+                for objs in innerResults:
+                    objects.update(objs.keys())
+                for existingObj in objects:
+                    newHistories[existingObj] = []
 
-                        # If already in previous history
-                        if object in result:
-                            # For all but one (the last) the previous history has to be doubled
-                            for concreteHistory in innerResult[object]:
-                                for concretePreviousHistory in result[object]:
-                                    h =  copy.deepcopy(concretePreviousHistory)
-                                    h.extend(concreteHistory)
-                                    newHistories[object].append(h)
-                        else:
-                            newHistories[object].extend(innerResult[object])
-
-                # Keep the elements, whose histories were not expanded
-                for obj in set(result.keys())-set(newHistories.keys()):
-                    newHistories[obj] = result[obj]
+                # Then go through all histories and for each of the objects, add an empty statement or the existing one
+                emptyCaseHandled = set()
+                for innerResult in innerResults:
+                    for existingObj in objects:
+                        if existingObj in innerResult:
+                            if existingObj in result:
+                                for concreteHistory in innerResult[existingObj]:
+                                    for concretePreviousHistory in result[existingObj]:
+                                        h =  copy.deepcopy(concretePreviousHistory)
+                                        h.extend(concreteHistory)
+                                        newHistories[existingObj].append(h)
+                            else:
+                                newHistories[existingObj].extend(innerResult[existingObj])
+                        elif not existingObj in emptyCaseHandled:
+                            # Add the empty case only one time
+                            emptyCaseHandled.add(existingObj)
+                            if existingObj in result:
+                                # When not in coditional path, keep previous trace
+                                newHistories[existingObj].extend(result[existingObj])
+                            else:
+                                # Or at least add an empty execution
+                                newHistories[existingObj].append([])
 
                 # Optimization would be to not copy the last element but alter the already available histories in result
                 result = newHistories
 
-            # Else single real Event :)
+
+            # Else single real Event
             else:
                 # Fist map the abstract objects to the real objects
                 obj,functioname,pos,contextFn = element 
@@ -182,9 +231,9 @@ class HistoryCollection(object):
                             # Take care that events are not added, when in the specific
                             # history already a ret appeared for that function
                             if not (history[-1][2] == "ret" and history[-1][1] == contextFn):
-                                history.append((functioname,pos,self.specialTag))
+                                history.append((functioname,pos, loopdepth, self.specialTag))
                     else:
-                        result[obj] = [[(functioname,pos,self.specialTag)]]
+                        result[obj] = [[(functioname, pos, loopdepth, self.specialTag)]]
                                     
         return result
 

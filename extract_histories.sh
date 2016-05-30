@@ -29,3 +29,4 @@ fi
 
 
 # Run your analysis and produce output as defined above
+python ./extract_histories.py $1 $2

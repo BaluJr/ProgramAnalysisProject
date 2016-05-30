@@ -1,28 +1,4 @@
-# Die HistoryCollections sind fertig. Jetzt muss ich noch überlegen, wie ich das mit den ObjectCollections und Env mache.
-# Die Sache ist, dass ich das zusammenmergen zu den komplexeren Objekten irgendwie regeln muss.
-# OK habe DIE Strategie. Die mache ich heute auch noch fertig!!!
-
-# Das merging passiert hier automatisch ohne dass es nach aussen auffällt. Muss es ja auch nicht, da die Env nicht geändert wird und die 
-# Hist uach einfach die referenzen nimmt, die sie rein bekommt. Dh wir brauchen die folgenden Funktionen:
-#
-# newObject(class):             Gibt einen eindeutigen Namen für ein neues Objekt der Klasse zurück. Interner Counter für Nummerierung (Integer Overflow nicht behandelt)
-# getAbstractObject(obj):  Gibt für ein Objekt das abstrakteste zurück (Das ist nur intern da von aussen nicht gebraucht. Getter geben alle automatisch das abstrakteste aus
-# getConcreteObjects           Gibt für ein Objekt alle enthaltenen Konkreten zurück. (Das wird nur gebraucht (Braucht man auch nur intern)
-# getAbstractToConcreteMapping: Das ist quasi die ausgabefunktion, die am ende noch ausgegeben wird und der Historybildung mit auf den Weg gegeben wird! :)
-#
-# heap_Add(obj, fiel, target): Fügt link hinzu. Wenn es das schon im Heap gibt, wird target und das vorherige Objekt automatisch gemerged
-# heap_Get(obj, field): Gibt (sofort) das abstrakteste Objekt zurück
-#
-# env_Add(var, value):          Fügt variablen Wert zu. Ggf automatisches mergen wenn es die schon gibt.
-# env_CreateLocal():            Legt variable in localer Environment an. Fehler, dass mehrfach anlegung wird nich behandelt
-# env_Get(var):                 Gibt (sofort) das abstrakteste Objekt zurück.
-# [env.prepareForSubfunction]:  siehe unten! 
-#                                   
-# copy():                       Kopiert alles um es in einem SwitchCase den versch. Cases mitzugeben
-# prepareForSubfunction():      Resetted den lokalen Teil der Environment, da die Subfunktion ja in neuer Umgebung. Muss nur beim Übergeben in den PArameter angebeben werden. Gut ist, da das andere Listen sind und daher ByReference, reicht es wenn das in der Subfunktion in dem kopieren Objekt behandelt wird.  Dann ist es auch in dem originalen aktuell.
-# merge(States[]):              Die schwierigste funktion. schaut was in den verschiedenen Strängen geändert wurde und merged objekte die sich nun überlappen.
-#
-# => Bam! Mehr braucht es nicht! Und dann ist auch direkt alles in einem Objekt drin!
+import copy
 
 class State(object):
     """ This class handles the mapping of the objects
@@ -38,17 +14,16 @@ class State(object):
         # The mappings from an object to the one level more abstract one
         self.objectToMoreAbstractObject = {}
         # Another mapping containing for each object a set of all concrete objects included in the abstraction
-        self.mostAbstractObjects = set()     # The set of the most abstract objects so far (necessary for fast merging of states)
-        self.abstractObjectToObjects = {} # Remember for all objects to which objects they split (like an archive)
+        self.abstractObjectToObjects = {}    # Remember for all abstr. objects the set of  atomar objects they contain
 
         # From HEAP  
-        # The mapping of object/array fields to objects. Handles the references to the other objects.
+        # Holds the most abstract objects. Mapping of object/array fields to objects. Handles the references to the other objects.
         self.heap = {"window-0:0": {}, "document-0:0": {}}
         
         # From ENV
         # Environment is split into the local and global one
         self.localEnvironment = {}
-        self.globalEnvironment = {"window": "window-0:0", "document": "document-0:0", "__this__": "window-0:0"} #Muss mir noch ueberlegen wie ich window und global vereinheitliche
+        self.globalEnvironment = {"window": "window-0:0", "document": "document-0:0", "__this__": "window-0:0"}
         # Two special fields necessary for administration
         self.functionName = None
         self.context = "window"
@@ -79,8 +54,8 @@ class State(object):
 
 
 
-    def mergeObjects(self, obj1, obj2): 
-        """ Merges two objects to a new abstract one within this state.
+    def mergeObjects(self, objs):
+        """ Merges two most abstract objects to a new most abstract one.
         Does it for the mappings as well as for the heap. By adding the new mapping to the 
         objects dictionary, the recursive search of the most abstract version in _getAbstractObject 
         ends up finding the new abstract object for a concrete object, without having to alter the 
@@ -89,53 +64,47 @@ class State(object):
         they are always in order. Otherwise the merging of multiple states will fail!
 
         Input:
-            obj1:   The identifier of the first object to merge.
-            obj2:   The identifier of the second object to merge.
-
-        Return:
-            newObj: The name of the newly created object
+            objs:   List of objects to merge
         """
 
-        if obj1 == None or obj2 == None:
+        # Determine which most abstract objects have to be merged
+        mostAbstractObjs = set()
+        for obj in objs:
+            mostAbstractObjs.add( self.getAbstractObject(obj) )
+        if len(mostAbstractObjs) == 1:
             return
 
+        # Update the mappings
+        newMostAbstractObj = '-'.join(mostAbstractObjs)
+        concretesInNewObject = set()
+        for mostAbstractObj in mostAbstractObjs:
+            self.objectToMoreAbstractObject[mostAbstractObj] = newMostAbstractObj
+            concretesInNewObject.update(self.getConcreteObjects(mostAbstractObj))
+        self.abstractObjectToObjects[newMostAbstractObj] = concretesInNewObject
 
-        # First determine which objects have to be merged
-        mappings = {obj1: obj1+obj2, obj2: obj1+obj2}
-        mergings = [(obj1+obj2, set([obj1, obj2]))]
-        newMergings = [set([obj1, obj2])] #, obj...)], set(obj3, obj9)]
-        # Go through all new 
-        while newMergings:
-            # Note the merge of the objects
-            for newMerging in newMergings:
-                fieldValues = {} # from field to set
-                for obj in newMerging:
-                    for field in self.heap[obj]:
-                        if not field in fieldValues:
-                            fieldValues[field] = set(self.heap[obj][field])
-                        else:
-                            fieldValues[field].add(self.heap[obj][field])
-            # Look whether this merging causes a new merging
-            newMergings = []
-            for field in fieldValues:
-                if len(fieldValues[field]) > 1:
-                    newMergings.append(fieldValues[field])
+        # Update the heap
+        fieldValues = {}
+        self.heap[newMostAbstractObj] = {}
+        for obj in mostAbstractObjs:
+            for field in self.heap[obj]:
+                self.heap[newMostAbstractObj][field] = self.heap[obj][field]
+                if not field in fieldValues:
+                    fieldValues[field] = set([self.heap_get(obj, field)])
+                else:
+                    fieldValues[field].add(self.heap_get(obj,field))
 
-        # Then do the merging
-        for merging in mergings:
-            newObj = {}
-            for prevObj in merging[1]:
-                for field in self.heap[prevObj]:
-                    if prevObj[field] in mappings:
-                        target = mappings[prevObj[field]]
-                    else:
-                        target = prevObj[field] 
-                    newObj["field"] = target
-        # Remember the new mappings in the official mapping list
-        for mapping in mappings:
-            self.objectToMoreAbstractObject[mapping] = mappings[mapping]
+        # When again overlapping objects another merge necessary
+        sets = list(fieldValues.values())
+        sets.sort(key=len, reverse=True)
+        for setOfItemsToMerge in sets:
+            if len(setOfItemsToMerge) > 1:
+                self.mergeObjects(setOfItemsToMerge)
+            else:
+                break
 
-        return "ChangeMEE"
+
+
+
 
 
     def getAbstractObject(self, obj):
@@ -169,7 +138,7 @@ class State(object):
             return self.abstractObjectToObjects[obj]
         else:
             # The object is not abstract
-            return [obj]
+            return set([obj])
 
 
     def getTarget(self, accessorList):
@@ -177,25 +146,25 @@ class State(object):
         This has been introduced in the very end since was necessary for 
         eg. assignment, that the accessor lists are returned and not the 
         objects themselves.
-        Muss ich noch gucken ob das so klappt! Irgendwie könnte ich 
-        mit variablen und objekten durcheinander kommen. 
-        Bei einem new Statement zB. gebe ich ja ein Element zurück, das ein Objekt
-        repräsentiert. Aber ansonsten gehe ich davon aus dass es eine Variable ist
-        -> also muss ich unterscheiden zwischen Liste die Zugriffe repräsentiert und 
-        Einzelobjekt wenn es keine Liste ist!
+        If only one accessor, it is a variable. For two accessors, the first
+        one is the object and the second one its field. Other cases are not
+        posible since cascaded field accesses are devided into multiple
+        MemberExpressions.
         """
-        # when already an object is given
+
+        # This is a preparation in case we go over to handle literals
+        if isinstance(accessorList, (int, float, bool)):
+            return None
+
         if not isinstance(accessorList, (list)):
             return accessorList
 
         if len(accessorList) == 1:
-            return self.env_get(accessorList[0])
+            result = self.env_get(accessorList[0])
         else:
-            obj = self.env_get(accessorList[0])
-            for cur in accessorList[1:-1]:
-                obj = state.heap_get(obj, cur)
-            return self.heap_get(obj, accessorList[-1])
+            result = self.heap_get(accessorList[0], accessorList[1])
 
+        return self.getAbstractObject(result)
 
 
     ########################################################################
@@ -214,14 +183,15 @@ class State(object):
         if target == None:
             return 
 
-        if not obj in objects:
-            objects[obj] = {}
-        if not field in objects[obj]:
-            objects[obj][field] = set()
-        #nee! HAlt! Das führt sofort zu einem merge! Ah das ist genau was wir bei dem dereferencing hatten. 
-        
-        objects[obj][field].add(target)
-
+        # Add to heap
+        if not obj in self.heap:
+            self.heap[obj] = {field: target}
+        else:
+            if not field in self.heap[obj] or self.heap[obj] == None:
+                self.heap[obj][field] = target
+            else:
+                # When there was already element at positin do merge
+                self.mergeObjects([self.heap[obj][field], target])
 
     def heap_get(self, obj, field):
         """ Returns the current set referen 
@@ -230,9 +200,9 @@ class State(object):
             object:     The object whose field shall be requested
             field:      The name of the field to request
         """
-        # Add to the local dictionary of objects
+
         if obj in self.heap and field in self.heap[obj]:
-            return self.getAbstractObject(self.heap[obj])
+            return self.getAbstractObject(self.heap[obj][field])
         else:
             return None
 
@@ -283,13 +253,13 @@ class State(object):
         if var in self.localEnvironment:
             if self.localEnvironment[var] != None:
                 # Ok to keep the old link, since recursive search handles it.
-                newObj = self.mergeObjects(self.localEnvironment[var], val)
+                newObj = self.mergeObjects([self.localEnvironment[var], val])
             else:
-                self.localEnvironment[val]
+                self.localEnvironment[var] = val
         else:
             if var in self.globalEnvironment and self.globalEnvironment[var] != None:
                 # Ok to keep the old link, since recursive search handles it.
-                newObj = self.mergeObjects(self.globalEnvironment[var], val)
+                newObj = self.mergeObjects([self.globalEnvironment[var], val])
             else:
                 self.globalEnvironment[var] = val
 
@@ -318,7 +288,6 @@ class State(object):
         '''
         subfunctionState = State()
         subfunctionState.globalEnvironment = self.globalEnvironment
-        subfunctionState.mostAbstractObjects = self.mostAbstractObjects
         subfunctionState.abstractObjectToObjects = self.abstractObjectToObjects
         subfunctionState.objectToMoreAbstractObject = self.objectToMoreAbstractObject
         subfunctionState.heap = self.heap
@@ -338,13 +307,12 @@ class State(object):
             copiedState:        A equal but independent new state 
         '''
         copiedState = State()
-        copiedState.heap = copy.deepCopy(self.heap)
-        copiedState.localEnvironment = copy.deepCopy(self.localEnvironment)
-        copiedState.globalEnvironment = copy.deepCopy(self.globalEnvironment)
-        copiedState.mostAbstractObjects = copy.deepCopy(self.mostAbstractObjects)
-        copiedState.abstractObjectToObjects = copy.deepCopy(self.abstractObjectToObjects)
-        copiedState.objectToMoreAbstractObject = copy.deepCopy(self.objectToMoreAbstractObject)
-        copiedState.heap = copy.deepCopy(self.heap)
+        copiedState.heap = copy.deepcopy(self.heap)
+        copiedState.localEnvironment = copy.deepcopy(self.localEnvironment)
+        copiedState.globalEnvironment = copy.deepcopy(self.globalEnvironment)
+        copiedState.abstractObjectToObjects = copy.deepcopy(self.abstractObjectToObjects)
+        copiedState.objectToMoreAbstractObject = copy.deepcopy(self.objectToMoreAbstractObject)
+        copiedState.heap = copy.deepcopy(self.heap)
         copiedState.context =self.context
         copiedState.functionName = self.functionName
         return copiedState
@@ -359,6 +327,7 @@ class State(object):
             states: List of other states to merge in
         '''
         # Extend Env by new variables (Does not matter whether new or old object, since both will end up in same abstraction object)
+
         for newState in newStates:
             self.globalEnvironment.update(newState.globalEnvironment)
             self.localEnvironment.update(newState.localEnvironment)
@@ -367,20 +336,17 @@ class State(object):
         for newState in newStates:
             for object in newState.heap:
                 if object in self.heap:
-                    self.heap.update(object)
+                    self.heap[object].update(newState.heap[object])
                 else:
-                    self.heap = object
+                    self.heap[object] = newState.heap[object]
 
         # Here the magic happens. When we merge here, all the references above will also point to these objects
         for newState in newStates:
-            for abstrObj in newState.mostAbstractObjectToObjects:
-                concObjsSet = newState.getConcreteObjects(abstrObj)
-                for concObj in concObjsSet:
+            for abstrObj in newState.heap: # go through all most-abstract objects
+                concreteObjsSet = newState.getConcreteObjects(abstrObj)
+                for concObj in concreteObjsSet:
                     prevAbstrObj = self.getAbstractObject(concObj)
-                    objsToMerge = concObjsSet - self.getConcreteObjects(prevAbstrObj)
+                    # TODO: Test whether again set is necessary
+                    objsToMerge = set(concreteObjsSet) - set(self.getConcreteObjects(prevAbstrObj))
                     for objToMerge in objsToMerge:
-                        self.mergeObjects(prevAbstrObj, objToMerge)
-            self.mostAbstractObjectToObjects.update(abstrObj)
-
-
-#TODO: Noch die aufsplittung beim Merge von Objekten in alt und neu!
+                        self.mergeObjects([prevAbstrObj, objToMerge])

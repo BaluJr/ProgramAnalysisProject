@@ -415,6 +415,35 @@ class ObjectCollection(object):
 ##########################################################################################
 # from HistoryCollection
 ##########################################################################################
+
+    # Die HistoryCollections sind fertig. Jetzt muss ich noch ueberlegen, wie ich das mit den ObjectCollections und Env mache.
+    # Die Sache ist, dass ich das zusammenmergen zu den komplexeren Objekten irgendwie regeln muss.
+    # OK habe DIE Strategie. Die mache ich heute auch noch fertig!!!
+    # Das merging passiert hier automatisch ohne dass es nach aussen auffällt. Muss es ja auch nicht, da die Env nicht geändert wird und die
+    # Hist uach einfach die referenzen nimmt, die sie rein bekommt. Dh wir brauchen die folgenden Funktionen:
+    #
+    # newObject(class):             Gibt einen eindeutigen Namen für ein neues Objekt der Klasse zurück. Interner Counter für Nummerierung (Integer Overflow nicht behandelt)
+    # getAbstractObject(obj):  Gibt für ein Objekt das abstrakteste zurück (Das ist nur intern da von aussen nicht gebraucht. Getter geben alle automatisch das abstrakteste aus
+    # getConcreteObjects           Gibt für ein Objekt alle enthaltenen Konkreten zurück. (Das wird nur gebraucht (Braucht man auch nur intern)
+    # getAbstractToConcreteMapping: Das ist quasi die ausgabefunktion, die am ende noch ausgegeben wird und der Historybildung mit auf den Weg gegeben wird! :)
+    #
+    # heap_Add(obj, fiel, target): Fügt link hinzu. Wenn es das schon im Heap gibt, wird target und das vorherige Objekt automatisch gemerged
+    # heap_Get(obj, field): Gibt (sofort) das abstrakteste Objekt zurück
+    #
+    # env_Add(var, value):          Fügt variablen Wert zu. Ggf automatisches mergen wenn es die schon gibt.
+    # env_CreateLocal():            Legt variable in localer Environment an. Fehler, dass mehrfach anlegung wird nich behandelt
+    # env_Get(var):                 Gibt (sofort) das abstrakteste Objekt zurück.
+    # [env.prepareForSubfunction]:  siehe unten!
+    #
+    # copy():                       Kopiert alles um es in einem SwitchCase den versch. Cases mitzugeben
+    # prepareForSubfunction():      Resetted den lokalen Teil der Environment, da die Subfunktion ja in neuer Umgebung. Muss nur beim Übergeben in den PArameter angebeben werden. Gut ist, da das andere Listen sind und daher ByReference, reicht es wenn das in der Subfunktion in dem kopieren Objekt behandelt wird.  Dann ist es auch in dem originalen aktuell.
+    # merge(States[]):              Die schwierigste funktion. schaut was in den verschiedenen Strängen geändert wurde und merged objekte die sich nun überlappen.
+    #
+    # => Bam! Mehr braucht es nicht! Und dann ist auch direkt alles in einem Objekt drin!
+
+
+
+
     def addEventToHistory (self, obj, methodSignature, position, contextFunction):
         ''' Adds an event of an object to the history.
         Used within the nodes, where something is executed.
@@ -529,3 +558,69 @@ class ObjectCollection(object):
         #        for word in history:
         #            word[3] = word[3] + 1   
         self.loopBody = True
+
+
+
+
+
+
+##########################################################################################
+# from STATE
+##########################################################################################
+
+
+# THE OLD MERGING FUNCTION
+    # if obj1 == None or obj2 == None:
+    #     return
+    #
+    # # A) DETERMINE WHICH MERGES ARE NECESSARY
+    # # Do the merging locally and only save final merging results in the class fields
+    # mappings = {obj1: obj1+obj2, obj2: obj1+obj2}
+    # mergings = {"obj1+obj2": set(obj1,obj2)}
+    #
+    # # Determine which
+    # newMergings = [set([obj1, obj2])]
+    # # Go through all new mergings
+    # while newMergings:
+    #
+    #     for newMerging in newMergings:                                          # Go through the merging sets
+    #         fieldValues = {}                                                    # Mark which fieds are there
+    #         for obj in newMerging:                                              # For each object in mergingset go through each field
+    #             for field in self.heap[obj]:
+    #                 if not field in fieldValues:                                # For each field add the most abstract object pointing to to the set
+    #                     fieldValues[field] = set([self.heap_get(obj, field)])
+    #                 else:
+    #                     fieldValues[field].add(self.heap_get(obj,field))
+    #
+    #         # When again overlapping obejects another merge necessary
+    #         for field in fieldValues:
+    #             if len(fieldValues[field]) > 1:
+    #                 newObj = ''.join(fieldValues[field])
+    #                 mergings[newObj] = field
+    #                 mapping
+    #                 veryNewMergings.append(fieldValues[field])
+    #
+    #         # Add the mapping and merging for the
+    #
+    #     # Now check which elements have to be overall merged by analysing these new mergings caused by the previous mergings
+    #
+    #     newMergings = []
+    #
+    #
+    # # B) DO THE MERGING
+    # for merging in mergings:
+    #     newObj = {}
+    #     for prevObj in merging[1]:
+    #         for field in self.heap[prevObj]:
+    #             if prevObj[field] in mappings:
+    #                 target = mappings[prevObj[field]]
+    #             else:
+    #                 target = prevObj[field]
+    #             newObj["field"] = target
+    #     self.abstractObjectToObjects[merging[0]] = merging[1]
+    # # Remember the new mappings in the official mapping list
+    # for moreConcreteObj in mappings:
+    #     self.objectToMoreAbstractObject[moreConcreteObj] = mappings[moreConcreteObj]
+    #     if moreConcreteObj in self.mostAbstractObjects:
+    #         self.mostAbstractObjects.remove(moreConcreteObj)
+    #     self.mostAbstractObjects.add(mappings[moreConcreteObj])
