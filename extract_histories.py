@@ -51,7 +51,7 @@ class history_extractor:
 
         
 
-    def getHistoryString(self, astObjects = ["0\t32", "0\t28"]):
+    def getHistoryString(self, astObjects = None):
         ''' Returns the created history
         Depending on whether specific nodes are given as parameter or not 
         it gives a list of those histories or a list of otherwise a list
@@ -643,7 +643,7 @@ def extract_histories(astsFilePath, testsFilePath = None):
     tests = None
     if testsFilePath != None:
         tests = open(testFilePath, "r").read().split("\n")
-    historiesString = hist_extractor.getHistoryString()
+    historiesString = hist_extractor.getHistoryString(tests)
     return historiesString
 
 
