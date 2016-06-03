@@ -7,26 +7,7 @@ from HistoryCollection import HistoryCollection
 
 
 
-#TODO:
-# -Giving the correct output format sothat callable from command line
-# -Filter for the nodes in the testfile (therefore mapping between nodes and AST necessary)
-#
-# Making onEvents execute always !?
-#
-# -Handling arrays
-# -Handling ForIn -> like with arrays more or less Literal Handling!?
-#
-# -Break, Continue Statement
-# -Looking how to handle Return and historiy extension etc for recursive functions 
-#  (because then check, whether last history element equals to state.functionName, makes problem
-#
-# Decide what how to handle anonymous objects, where not clear what classname is. They are kept in history when
-# at least one additional operation is performed on them. But they are excluded in output (line 71).
-#
-# Handling multiple AST per file and in format like needed by NeuralNetwork. Not done yet since unknown what necessary
-
-# Only a temporal switch for debugging- whether to read the json from program.js or own code from IsolatedCode.js
-UseIsolatedCodejs = True
+UseTestingCodejs = True
 
 
 class history_extractor:
@@ -75,7 +56,7 @@ class history_extractor:
 
                 classTag = "<" + obj.split("_")[0] + ">"
                 for concreteTrace in self.outputHist[obj]:
-                    outputString += classTag
+                    #outputString += classTag
                     for event in concreteTrace:
                         outputString += "<" + ','.join([str(event[i]) for i in range(4)])  + ">"
                     outputString += "\n"
@@ -522,30 +503,6 @@ def prepare_files(astFilePath):
         callgrapgh the javascrip code (potentially not interesting for calling functions)
     """
         
-    #! I CHANGED THE JS-CALLGRAPH CODE sothat it immediatly reads the input from the argument instead
-    # from a separate file. In the implementation below only a single file is taken.
-    # In asutils.js -> Line100 in function: buildAST exchange by the following function:
-    """ function buildAST(files) {
-	source = files[0]
-        var ast = {
-            type: 'ProgramCollection',
-            programs: [],
-            attr: {}
-        };
-        //sources.forEach(function (source) {
-            var prog = esprima.parse(source, { loc: true, range: true });
-            prog.attr = { filename: "inputfile", sloc : sloc(source, "javascript").sloc};
-            ast.programs.push(prog);
-        //});
-        init(ast);
-        ast.attr.sloc = ast.programs
-            .map(function(program){
-                return program.attr.sloc;
-            }).reduce(function(previous, current) {
-            return previous + current;
-        });
-        return ast;
-    } """
 
     # 0) If javascriptcode given instead AST -> Create ast-file to use default behaviour afterwards and use that astFilePath
     if (UseIsolatedCodejs):

@@ -1,11 +1,36 @@
-a = new A();
-switch (a) {
-case a.cond1(): a.Test();
-case a.cond2(): a.BLA();
+// The original Testcode
+(function()  {
+   var httpRequest;
+   document.getElementById("ajaxButton").onclick = (function()  {
+      makeRequest("test.html");
+   }
+);
+   function makeRequest(url)  {
+      httpRequest = new XMLHttpRequest();
+      if (! httpRequest)  {
+         alert("Giving up :( Cannot create an XMLHTTP instance");
+         return false;
+      }
+      httpRequest.onreadystatechange = alertContents;
+      httpRequest.open("GET", url);
+      httpRequest.send();
+   }
+;
 }
-b = new B()
-b.test()
+)();
 
+//a = new T() || new Z();
+//a.test();
+
+
+//// Switch Case working
+//a = new A();
+//switch (a) {
+//case a.cond1(): a.Test();
+//case a.cond2(): a.BLA();
+//}
+//b = new B()
+//b.test()
 
 
 // Merging of objects on heap is working

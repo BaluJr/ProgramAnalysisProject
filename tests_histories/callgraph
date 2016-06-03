@@ -1,8 +1,0 @@
-IsolatedCode.js@2:2-473 -> IsolatedCode.js@2:2-469
-IsolatedCode.js@4:45-82 -> Document_prototype_getElementById
-IsolatedCode.js@5:113-137 -> IsolatedCode.js@8:149-465
-IsolatedCode.js@9:198-218 -> XMLHttpRequest
-IsolatedCode.js@11:257-312 -> Window_prototype_alert
-IsolatedCode.js@15:405-433 -> Window_prototype_open
-IsolatedCode.js@15:405-433 -> XMLHttpRequest_prototype_open
-IsolatedCode.js@16:441-459 -> XMLHttpRequest_prototype_send

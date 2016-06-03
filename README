@@ -3,27 +3,48 @@ Program Analysis and Synthesis, Spring 2016, ETH Zurich
 ## Project: Deep Learning for Programs
 We provide two scripts 'suggest.sh' and 'extract_histories.sh' that will be used to test your solution. You should update both scripts by following the instructions provided inside them and include them in your submission.
 
-I just followed the basic project structure like downloaded from the PA site. I just added the .py files. Depending on the complexitiy we reach, we may introduce subfolders for each of the two subtasks HistoryExtraction and Suggestion.
+I just followed the basic project structure like downloaded from the PA site and added some more files:
+
+A) Python code for history extraction:
+extract_histories.py
+State.py
+HistoryCollection.py
+suggest.py
+
+B) Rubish bin for old code:
+RemvedCode.py
+
+C) Summary of the elements that might appear in histories:
+AvailableElementsofAST.txt
+
+D) Place for discussions:
+discussions.
 
 
 
 
+I CHANGED THE JS-CALLGRAPH CODE sothat it immediatly reads the input from the argument instead !!!!
+So we avoid saving always another file when created by js_printer.
 
-______
-History Creation Max:
--> We always create the two interesting parts: Callgraph and AST -> What do we need the callgraph for? PointerAnalysis makes sense but the callgraph not!? 
-Which additional information does he have?
- 
- Another Question is: When we extract histories, do we do it per object? But then we could learn a network for each element separatly and the context would be more or less ignored.
-
-
-Learning approach Max:
-During setup of the histories we count each word in a dictionary. Elements that appear two rarely are dropped and replaced by UNKNOWN TOKEN:
-The others are added one after one into an mapping dictionary. 
-The oposite dictionary can be easily built.
-reverse_map = dict((reversed(item) for item in forward_map.items()))
-
-Good reference:
-http://www.wildml.com/2015/09/recurrent-neural-networks-tutorial-part-2-implementing-a-language-model-rnn-with-python-numpy-and-theano/
-
-Confirmed by Benjamin: The ID is the class name. When multiple APIs have same classes we are screwed.
+The change made: In asutils.js arround line 100 exchange the function buildAST by the following function:
+    """ function buildAST(files) {
+	source = files[0]
+        var ast = {
+            type: 'ProgramCollection',
+            programs: [],
+            attr: {}
+        };
+        //sources.forEach(function (source) {
+            var prog = esprima.parse(source, { loc: true, range: true });
+            prog.attr = { filename: "inputfile", sloc : sloc(source, "javascript").sloc};
+            ast.programs.push(prog);
+        //});
+        init(ast);
+        ast.attr.sloc = ast.programs
+            .map(function(program){
+                return program.attr.sloc;
+            }).reduce(function(previous, current) {
+            return previous + current;
+        });
+        return ast;
+    } """

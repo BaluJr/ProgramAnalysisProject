@@ -1,12 +1,31 @@
 This file shall be a place for writing down questions and thoughts:
-_____
-Max:
--The javascript_call_graph project ignores underscores in variable names. Doesn't this may cause serious problems?
--It regards calls to new XMLHttpRequest() but not to other not existing objects. How does the project know?
 
 
 
-Some arguments for paper:
+ ################## PROBLEMS AND TODOS ####################:
+# - Cut away everything after the hole
+#
+# Making onEvents execute always !?
+#
+# -Handling arrays
+# -Handling ForIn -> like with arrays more or less Literal Handling!?
+#
+# -Break, Continue Statement
+# -Looking how to handle Return and historiy extension etc for recursive functions
+#  (because then check, whether last history element equals to state.functionName, makes problem
+#
+# Decide what how to handle anonymous objects, where not clear what classname is. They are kept in history when
+# at least one additional operation is performed on them. But they are excluded in output (line 71).
+#
+# Handling multiple AST per file and in format like needed by NeuralNetwork. Not done yet since unknown what necessary
+
+# Only a temporal switch for debugging- whether to read the json from program.js or own code from IsolatedCode.js
+
+# The javascript_call_graph project ignores underscores in variable names. Doesn't this may cause serious problems?
+# It regards calls to new XMLHttpRequest() but not to other not existing objects. How does the project know?
+
+
+ ################## PAPER ARGUMENTS ####################
 
 - Handling loops: Loop are not executed at all but only the looping depth is written down for each instruction. That has two reasons. On the one hand 
 following loops leads to an exponential explosion of possible histories if there are conditional executions inside the loop. On the other hand the 
@@ -48,6 +67,17 @@ easily and implicitly convertible to objects
 
 
 
+
+
+
+
+
+
+
+
+
+
+
  ################## STEENSGAARD ####################
  # In this file all functionalities necessary to handle the points-to analysis are handled
 
@@ -55,87 +85,87 @@ easily and implicitly convertible to objects
 # STEENSGAARD ANALYSIS:
 # A) STUKTUREN:
 # AHHH ich glaube ich habe jetzt verstanden warum es wichtig ist noch diese 
-# zusätzliche Potenzmenge einzuführen!!!
+# zusï¿½tzliche Potenzmenge einzufï¿½hren!!!
 # a) Variablen v -> zeigen auf die Sets an Zieladressen, Bzw. sie SIND ein Set an Zieladressen.                     = Env: Dict mit Verweisen auf pts Menge
 # b) Sets an Zieladressen rho <- DIE werden als Returnvalue uebergeben                                              = Pts: Set mit objekten auf die 
 #    Ah und das ist auch notwendig weil ja nicht immer eine Variable auf so eine Gruppe zeigt!                             Verwiesen werden kann + Set
 #    Variablen sind ja nur ein Zugang zu diesen Strukturen.                                                                von Pts die hierauf verweisen
-# c) Das ist in der Präse keine Eigene Struktur, sondern nur eine Erklärng wie die                                         (notwendig weil bei zB. return
+# c) Das ist in der Prï¿½se keine Eigene Struktur, sondern nur eine Erklï¿½rng wie die                                         (notwendig weil bei zB. return
 #    Vars abgespeichert werden. Darum der Doppelpunkt.                                                                      Pts von variable entkoppelt
-#    => Er behällt eigene Mengen für jedes Powerset und merged die dann über das UnionFind pattern.                         wird)
-#       Aber das hilft mir irgendwie mäßig bei der richtigen Setbildung am Ende. Daher mal naiven Ansatz testen             Zeigen auf e € Obj
+#    => Er behï¿½llt eigene Mengen fï¿½r jedes Powerset und merged die dann ï¿½ber das UnionFind pattern.                         wird)
+#       Aber das hilft mir irgendwie mï¿½ï¿½ig bei der richtigen Setbildung am Ende. Daher mal naiven Ansatz testen             Zeigen auf e ï¿½ Obj
 #       mit 2 Sets: 1. Adressen pts auf die gezeigt wird; 2. dinge die auf pts zeigen 
 #    
-# x) Objekte mit Liste der möglichen Histories Ahhh!                                                
-#    Das gehört ja nicht nicht zu Steensgaard Analysis. Das kommt auch nicht in Präse vor!                          =Obj: Die echten Objkte, bei denen
+# x) Objekte mit Liste der mï¿½glichen Histories Ahhh!                                                
+#    Das gehï¿½rt ja nicht nicht zu Steensgaard Analysis. Das kommt auch nicht in Prï¿½se vor!                          =Obj: Die echten Objkte, bei denen
 #    Das brauche nur ich, da ich nicht nur das Pointing ziel wissen will, was bereits mit                                 Histories abgespeichert werden
-#    a-c affengeil geht, sondern eben auc die Histories für diese Ziele
+#    a-c affengeil geht, sondern eben auc die Histories fï¿½r diese Ziele
 #    FALSCH!!!! Diese gibt es im Paper eben NICHT!!! DAS hatte ich falsch verstanden. Was wir in C haben ist 
-#    sofort auch was wir als Objekte verwenden. Dh die Objekte werden auch direkt zusammen geführt.
-#    (Keine Ahnung wie man dann noch histories per Objekttyp realisieren möchte.)
+#    sofort auch was wir als Objekte verwenden. Dh die Objekte werden auch direkt zusammen gefï¿½hrt.
+#    (Keine Ahnung wie man dann noch histories per Objekttyp realisieren mï¿½chte.)
 #    Es kommt hier dann jedoch noch ein Heap ins Spiel, den es bei normalem Steensgaard nicht gibt. Hier wird 
-#    für jedes zusammengelegte Objekt für jeden Member gestgehalten auf welches zusammengelegte andere Objekt
-#    es zeigt. Hier eben vorsichtig sein mit der verbingung zwischen Paper und der Präse. Die Präse vereinfacht 
+#    fï¿½r jedes zusammengelegte Objekt fï¿½r jeden Member gestgehalten auf welches zusammengelegte andere Objekt
+#    es zeigt. Hier eben vorsichtig sein mit der verbingung zwischen Paper und der Prï¿½se. Die Prï¿½se vereinfacht 
 #    hier zu sehr mit der Dereferenzierungs Abbildung.
 #
-#    Und allgemein zum Verständnis: Wie man das im Paper ließt, wir speichern das alles einfach alles als 
+#    Und allgemein zum Verstï¿½ndnis: Wie man das im Paper lieï¿½t, wir speichern das alles einfach alles als 
 #    mapping ab und eben nicht als Objekte.
 #    
 # B) IMPLEMENTATION
-# Referencing:           a = &b <>   a = new B()   =>  l_B € pts(a)
-## -> Simpel Adresse von B zu pts(a) hinzufügen
+# Referencing:           a = &b <>   a = new B()   =>  l_B ï¿½ pts(a)
+## -> Simpel Adresse von B zu pts(a) hinzufï¿½gen
 # Aliasing:              a =  b <>   a = b         =>  pts(a) = pts(b)
-## -> Vereinen wo a und b drauf zeigen können (ab dem Moment für immer) / gerade ganz kurz Gedanke warum Datenstruktur
+## -> Vereinen wo a und b drauf zeigen kï¿½nnen (ab dem Moment fï¿½r immer) / gerade ganz kurz Gedanke warum Datenstruktur
 ## -> Ahh um das effizient zu machen brauchen wir wirklich diese eine Datenstruktur
 ## -> Ahhhhh Genaaaau! Damit wir wissen, welches set an variablen s auf diese pts zeigt!
-# Dereferencing read:    a = *b <>   a = b.f       =>  Each l € pts(b): pts(a) = pts(l)
+# Dereferencing read:    a = *b <>   a = b.f       =>  Each l ï¿½ pts(b): pts(a) = pts(l)
 ## -> Ah dann auch klar! Auf alles auf das b zeigen kann, zeigen kann kann a jetzt drauf zeigen. Aber nicht auf b selbst. ^^
 ## Eieieieie AHHH! Noch was klar: Man muss nicht sofort alle Referenzen aufbauen, sondern ja erst wenn auch welch gesetzt werden. Und dann eben als 
 ## Ziel des ganzen Objektes.
-# Dereferencing write:  *a =  b <> a.f = b         =>  Each l € pts(a): pts(b) = pts(l)
-## -> Auch Ahaa!! Alles auf das a zeigen kann, muss jetzt auf b zeigen können :)
+# Dereferencing write:  *a =  b <> a.f = b         =>  Each l ï¿½ pts(a): pts(b) = pts(l)
+## -> Auch Ahaa!! Alles auf das a zeigen kann, muss jetzt auf b zeigen kï¿½nnen :)
 # => Und DIE KANN ICH JETZT SOO UMSETZEN. :) :) :) ^^ :)
 #
 # C) CONCRETE IMPLEMENTATION TO UNDERSTAND WHY AND WHETHER DATASTRUCTURE
 # Der springende Punkt ist zB. die Pointer Analysis. Wenn ich hier a = b mache muss ich beide 
 # pts-Mengen mergen und beide Variablen auf das gleiche zeigen lassen. Das klappt auch noch, wenn a auf 
-# eine Zusätzliche Variable zeigen kann. Dann auch b. 
-# -Blöd würde es jetzt aber, wenn wir jetz b = c machen und die beiden Mengen gleichgesetzt werden. Weil dann
-#  müssen wir rausfinden, dass a auch auf pts(b) zeigt um auch a auf das neue Objekt zeigen zu lassen. 
+# eine Zusï¿½tzliche Variable zeigen kann. Dann auch b. 
+# -Blï¿½d wï¿½rde es jetzt aber, wenn wir jetz b = c machen und die beiden Mengen gleichgesetzt werden. Weil dann
+#  mï¿½ssen wir rausfinden, dass a auch auf pts(b) zeigt um auch a auf das neue Objekt zeigen zu lassen. 
 # - Genau das ist bei den Dereferencing Operation auch der Fall! Da werden ja auch Sets gleichgesetzt und 
-#  und wir müssen wissen welche Variablen alle auf das neue Objekt umgesetzt werden müssen.
+#  und wir mï¿½ssen wissen welche Variablen alle auf das neue Objekt umgesetzt werden mï¿½ssen.
 # Hm!
 #
-# => alles in allem nichts besonderes. Wäre ich selbst drauf gekommen und dann hätte ich mir auch nicht 
-# so lange gedanken gemacht. Ich merke wie es mir schwerer fällt es blockiert, andere Lösungen zu verstehen 
+# => alles in allem nichts besonderes. Wï¿½re ich selbst drauf gekommen und dann hï¿½tte ich mir auch nicht 
+# so lange gedanken gemacht. Ich merke wie es mir schwerer fï¿½llt es blockiert, andere Lï¿½sungen zu verstehen 
 # vs. eigene Entwickeln. => Muss ich mal reflektieren.
-# Andere Sache: Das aufschreiben hilft sehr. Dadurch kann ich das gespräch mit einer anderen Person ersetzen. 
+# Andere Sache: Das aufschreiben hilft sehr. Dadurch kann ich das gesprï¿½ch mit einer anderen Person ersetzen. 
 #
 #
 #
 # WIE SIE IM PAPER DAS MACHEN:
-# Die Verwirrung ist eben, dass es nicht wirklich pointer gibt sondern nur objekte die felder haben, die wieder auf andere zeigen können.
+# Die Verwirrung ist eben, dass es nicht wirklich pointer gibt sondern nur objekte die felder haben, die wieder auf andere zeigen kï¿½nnen.
 # Sie haben nur abstrakte Objekte, dh. alle Fields werden dann auch dem gesamten abstrakten Objekt zugeschrieben. 
-# (Bedenke: Kann natürlich davon ausgegangen werden, dass der Code richtig ist. Dh es ist eine Abstration, aber fehler können nicht passieren. 
+# (Bedenke: Kann natï¿½rlich davon ausgegangen werden, dass der Code richtig ist. Dh es ist eine Abstration, aber fehler kï¿½nnen nicht passieren. 
 # 
 # Ich habe statt dessen ja noch richtige Objekte und lediglich points-to-mengen, die auf die Objekte zeigen.
 # Dh. L brauche ich eigentlich nicht. Es ist implizit dadurch gegeben, dass ich die eindeutigen Bezeichner habe. Wenn dieser Bezeichner
 # nicht mehr auftaucht ist das Objekt halt weg und seine History wird nicht mehr erweitert. 
-# Ich merke mir bloß 
+# Ich merke mir bloï¿½ 
 # -Env = l_env + g_env : Die Variablen und die Pts auf die sie zeigen
-# -Heap : Für jedes Objekt (bzw. Array) für jede FieldId die auf etwas zeigt. Die Pts menge
+# -Heap : Fï¿½r jedes Objekt (bzw. Array) fï¿½r jede FieldId die auf etwas zeigt. Die Pts menge
 # -Pts : Set an Objektnamen, die in Frage kommen.
 #
-# Wir wissen hinterher nach der Vereinigung eh nicht mehr auf welches Objekt das Event bezogen ist. Wir müssen es daher allen zur Verfügung stellen. 
+# Wir wissen hinterher nach der Vereinigung eh nicht mehr auf welches Objekt das Event bezogen ist. Wir mï¿½ssen es daher allen zur Verfï¿½gung stellen. 
 # => Der Komplexe Fall der jetzt wieder entsteht ist, wenn wir eine Zuweisung in einer Chose haben. Dann entstehen 2 versch. Possible histories.
 #
-# Ansatz für histories: Wenn zusammengelegt wird in der Start history markieren wo es weiter geht und für das Abstrakte objekt eine eigene History beginnen.
+# Ansatz fï¿½r histories: Wenn zusammengelegt wird in der Start history markieren wo es weiter geht und fï¿½r das Abstrakte objekt eine eigene History beginnen.
 # Das muss ich gerade weiter spinnen: Dann kann ich hinterher bei den einzelobjekten anfangen und die histories durchlaufen bis zum Ende wobei ich dann wenn
 # es zu aliasing kommt eben durch die Histories der Abstrakten Objekte laufe. 
 #
-# Kurzes veständnis was zur prediction gebraucht wird: DAS ist ein guter Ansatz
-# Wir nehmen hinterher Sätze und schauen auf die Wort reihenfolge. Die reihenfolge die am häufigsten ist dann auch am Wahrscheinlichsten.
-# Abstrahieren wir nun (wir merken uns für jedes abstrakte Objekt welche konkreten Objekte enthalten sind.) bekommt ein Objekt natürlich falsche 
+# Kurzes vestï¿½ndnis was zur prediction gebraucht wird: DAS ist ein guter Ansatz
+# Wir nehmen hinterher Sï¿½tze und schauen auf die Wort reihenfolge. Die reihenfolge die am hï¿½ufigsten ist dann auch am Wahrscheinlichsten.
+# Abstrahieren wir nun (wir merken uns fï¿½r jedes abstrakte Objekt welche konkreten Objekte enthalten sind.) bekommt ein Objekt natï¿½rlich falsche 
 # histories zugeordnet. Dies sollte aber bedeutend seltener und mit wechselnden partnern passieren, sodass die korrekte verwendung im Schnit noch 
 # hervorstechen sollte. 
 # 
@@ -144,27 +174,27 @@ a = A();
 b = B();
 a.test1();
 b.test2();
-# Ob man innerhalb eines If ist darf keinen unterschied machen. Sonst käme alles durcheinander. Wenn müssen alle Unklarheiten 
-# beim mergen geloest werden. Und wenn das nicht geht kann ich es ganz vergessen! Normal müsste ich eine DeepCopy der g_env, l_env und des heap uebergeben.
-if (dontknow):  # Create history und füge der anderen hinzu
-    a.test3();  # Create another history for the then-case -> Solange wie es noch kein merging gibt, normal ausführen, Wenn es zu aliasing kommt
+# Ob man innerhalb eines If ist darf keinen unterschied machen. Sonst kï¿½me alles durcheinander. Wenn mï¿½ssen alle Unklarheiten 
+# beim mergen geloest werden. Und wenn das nicht geht kann ich es ganz vergessen! Normal mï¿½sste ich eine DeepCopy der g_env, l_env und des heap uebergeben.
+if (dontknow):  # Create history und fï¿½ge der anderen hinzu
+    a.test3();  # Create another history for the then-case -> Solange wie es noch kein merging gibt, normal ausfï¿½hren, Wenn es zu aliasing kommt
     a = b;      #
     b.test4();
 else:
     a.test5();
-# Brauchen eine Merge State Function. Diese muss die Ausführungsstränge zur abstraktesten Version mergen.!!!
+# Brauchen eine Merge State Function. Diese muss die Ausfï¿½hrungsstrï¿½nge zur abstraktesten Version mergen.!!!
 
 b.bam(); # <- Das wird auf jeden Fall schon auf die neue gemergede history angewendet.
-# => nach dem alten Schema hätte ich hier jetzt einfach je 2 histories für a und b.
+# => nach dem alten Schema hï¿½tte ich hier jetzt einfach je 2 histories fï¿½r a und b.
 
-# Die größte Frage ist jetzt wie man das konkret bei Cases umsetzt:
-# -Für normale lineare ausführung ist es einfach. Lediglich beim Moment des zusammenlegens eine neue History für das abstrakte Objekt anlegen.
-# -Jetzt muss man überlegen wie man das mache, wenn es in einer Conditional Situation passiert. Das das zusammenlegen erlaubt ist ist keine Frage
-#  Da es hier lediglich um Präzisionsverlust geht, ist das auch legitim wenn es in der conditional Abfrage passiert und ich trotzdem zusammen lege. 
+# Die grï¿½ï¿½te Frage ist jetzt wie man das konkret bei Cases umsetzt:
+# -Fï¿½r normale lineare ausfï¿½hrung ist es einfach. Lediglich beim Moment des zusammenlegens eine neue History fï¿½r das abstrakte Objekt anlegen.
+# -Jetzt muss man ï¿½berlegen wie man das mache, wenn es in einer Conditional Situation passiert. Das das zusammenlegen erlaubt ist ist keine Frage
+#  Da es hier lediglich um Prï¿½zisionsverlust geht, ist das auch legitim wenn es in der conditional Abfrage passiert und ich trotzdem zusammen lege. 
 #  Ist in so einem Fall ja auch einfach awkyard programmiert.
 #  Aber die Umsetzung ist trotzdem ein Problem. Ich muss mich ja festlegen, ob ich hinterher oder vorher merge. Bzw. wie!? 
 
-# Ah ok! Das einfache rüberkopieren ist nicht möglich, da ja auch noch was im Nachhinein in b fließt bei a ankommen muss.
+# Ah ok! Das einfache rï¿½berkopieren ist nicht mï¿½glich, da ja auch noch was im Nachhinein in b flieï¿½t bei a ankommen muss.
 # Ist das so?
 
 # => => => => => 
@@ -172,57 +202,21 @@ b.bam(); # <- Das wird auf jeden Fall schon auf die neue gemergede history angew
 # Objectsmenge L            -> ISt einfach nur die eindeutige ObjectID
 # Einen Heap mit rumreichen -> Doppeltverschachteltes Dictionary: "ObjektID": "Field" : ObjectID
 # Ein Env Objekt            -> Einfaches Dictionary               "Variablename" : ObjectID
-# Eine HistoryCollection    -> Für jedes Objekt die History (Dabei haben konkrete Objekte eine history und eben auch abstrakte. In einer History wird 
+# Eine HistoryCollection    -> Fï¿½r jedes Objekt die History (Dabei haben konkrete Objekte eine history und eben auch abstrakte. In einer History wird 
 #                              immer angegeben mit welcher History es weiter geht. So kann man am ende die Finale history erstellen.
-# => Env und Heap werden mit rumgereicht. History kommen ja als ergebnis zurück. 
-# Die Objektmenge wird durch die eindeutigen IDs implizit verwaltet. Ist dann mehr ein globales Dictionary mit einem counter für jeden Klassentypen.
+# => Env und Heap werden mit rumgereicht. History kommen ja als ergebnis zurï¿½ck. 
+# Die Objektmenge wird durch die eindeutigen IDs implizit verwaltet. Ist dann mehr ein globales Dictionary mit einem counter fï¿½r jeden Klassentypen.
 #
-# Für lineare ausführung klappt das ganze so schon wunderbar. Es braucht noch die Implementierung der Objektzusammenfassung. 
-# Sollte aber Straight-forward sein. Diese Funktion muss gekapselt sein: da sie aus verschiedenen situationen nützlich! 
+# Fï¿½r lineare ausfï¿½hrung klappt das ganze so schon wunderbar. Es braucht noch die Implementierung der Objektzusammenfassung. 
+# Sollte aber Straight-forward sein. Diese Funktion muss gekapselt sein: da sie aus verschiedenen situationen nï¿½tzlich! 
 #
-# Dann braucht es noch eine erweiterte MergingFunktion für das merging von alternativen Ausführungspfaden, 
-# wie es das momentan schon für die Histories gibt erweitet: 
+# Dann braucht es noch eine erweiterte MergingFunktion fï¿½r das merging von alternativen Ausfï¿½hrungspfaden, 
+# wie es das momentan schon fï¿½r die Histories gibt erweitet: 
 # Env:          Die allgemeinste Version die machbar ist. Wenn same variable onto different objekts -> Mergen der Objekte
 # Heap:         Take the most abstracted version. So if a = b in "then" and b = c in "else", then merge all three afterwards. Since these are sets it 
 #               does not matter if b is implicitly two times merged into the resulting set.
-# Histories:    Hier überdenke ich die Struktur noch einmal und anstatt fertig zusammengestellte histories zu haben verlinke ich nur untereinander.
-#               Die Kombinationen ergeben sich dann hinterher beim zusammenbau. Beim mergen kann ich dann einfach beide Pfade parallel anhängen und 
-#               anschließend die gemergede version anhängen für den weiteren verlauf. Beim zusammenbau bekomme ich das dann sauber rekonstruiert.
-#               Präzision geht auf diese weise erst verloren wo nötig. :)
+# Histories:    Hier ï¿½berdenke ich die Struktur noch einmal und anstatt fertig zusammengestellte histories zu haben verlinke ich nur untereinander.
+#               Die Kombinationen ergeben sich dann hinterher beim zusammenbau. Beim mergen kann ich dann einfach beide Pfade parallel anhï¿½ngen und 
+#               anschlieï¿½end die gemergede version anhï¿½ngen fï¿½r den weiteren verlauf. Beim zusammenbau bekomme ich das dann sauber rekonstruiert.
+#               Prï¿½zision geht auf diese weise erst verloren wo nï¿½tig. :)
 #
-
-
-
-
-
-class PointsToSet(object):
-    ''' Manages the points to analysis.
-    Help class which, encapsulates the handling of the points-to-sets.
-    '''
-
-    targets = set()
-    users = set() #-> Mist das geht nicht da nicht als reference!
-
-    def add(self, obj):
-        ''' Adds an object to the points-to-set
-
-        Input:
-        obj:    The object, that shall be added to the points-to-set
-        '''
-        self.targets.add(obj)
-
-    def merge(self, pts):
-        ''' Merges two PointsToSets
-        Takes care, that all references pointing towards one of the previous pts
-        are redirected towards the new pts. Wie machen....
-        ...muss was mit dem UnionFind zu tun haben, weswegen er die Strategie nimmt.
-
-        Input:
-        pts:    The other pts
-
-        Output:
-        newPts:     The newly created pts 
-        '''
-       
-    def getTargets(self):
-        return self.targets

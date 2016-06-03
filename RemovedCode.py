@@ -409,6 +409,38 @@ class ObjectCollection(object):
 
 
 
+    class PointsToSet(object):
+        ''' Manages the points to analysis.
+        Help class which, encapsulates the handling of the points-to-sets.
+        '''
+
+        targets = set()
+        users = set()  # -> Mist das geht nicht da nicht als reference!
+
+        def add(self, obj):
+            ''' Adds an object to the points-to-set
+
+            Input:
+            obj:    The object, that shall be added to the points-to-set
+            '''
+            self.targets.add(obj)
+
+        def merge(self, pts):
+            ''' Merges two PointsToSets
+            Takes care, that all references pointing towards one of the previous pts
+            are redirected towards the new pts. Wie machen....
+            ...muss was mit dem UnionFind zu tun haben, weswegen er die Strategie nimmt.
+
+            Input:
+            pts:    The other pts
+
+            Output:
+            newPts:     The newly created pts
+            '''
+
+        def getTargets(self):
+            return self.targets
+
 
 
 
