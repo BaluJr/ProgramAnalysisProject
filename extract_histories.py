@@ -7,7 +7,7 @@ from HistoryCollection import HistoryCollection
 
 
 
-UseTestingCodejs = True
+UseTestingCodejs = False
 
 
 class history_extractor:
@@ -78,7 +78,7 @@ class history_extractor:
         return outputString
 
 
-    def _analyseStatement(self, nodeNumber, state):
+    def _analyseStatement(self, astNumber, nodeNumber, state):
         ''' Analyses a single statment
         Executes a statement returning its history. A return value is not provided.
         Handling "return" is done by observing the special return-Element in the
@@ -478,34 +478,30 @@ class history_extractor:
 # GOBAL FUNCTIONS
 ######################################################################
 def prepare_files(astFilePath):
-    """ Takes ASTs and creates the callgraph for the files
+    """ Takes a file with ASTs, loads them and creates callgraphs
     It takes the asts and creates codefiles from it by using the jsprinter. Then it 
     let jscallgraph create the callgraph. To do so it avoids writing to files, but 
     immediatly passes in the code per commandline. (The source of the jscallgraph has 
-    been changed to realize this. See comment in code below.).
+    been changed to realize this. See in the project readme).
     Then the lines and columns of the ASTs are also printed. 
     Finally the results are put together sothat the callgraph is returned immediatly 
     as a mapping from AST node to another AST node. That makes it later easy to lookup 
     functionality.
     Special objects (window, XHTTPRequest, etc. are handled in a special way.). For this 
     I have to ask the creators of JSCallgraph how it is implemented.
-    At the moment only a single AST is supported since in the histories testcases only a 
-    single AST is given. 
-    For the real training purposes later on it might be interesting to read multiple ASTs
-    at once (eg. all files of a certain project). Then the js-callgraph is capable of 
-    detecting calls across multiple files.
+    The multiple ASTs in the file are handled at the same time sothat calls between them are possible.
        
     Input:
-        filepath:       full path of the file to process including filename 
+        filepath:       full path of the file including one ast per line
 
     Output:
-        ast:             the callgraph parsed into the callgraph format (see callgraph class)
-        callgrapgh the javascrip code (potentially not interesting for calling functions)
+        asts:           The parsed asts
+        callgraphs      An array of callmappings from (astId, nodeId) to (astId, nodeId)
     """
         
 
     # 0) If javascriptcode given instead AST -> Create ast-file to use default behaviour afterwards and use that astFilePath
-    if (UseIsolatedCodejs):
+    if (UseTestingCodejs):
         # javascriptcode given -> Generate ast and save as file
         p0 = Popen(["/home/pa/Desktop/js_parser/bin/js_parser.js",
                     "/home/pa/Desktop/Repository/ProgramAnalysisProject/tests_histories/IsolatedCode.js"]
@@ -521,57 +517,79 @@ def prepare_files(astFilePath):
 
     # A) Parse the AST
     astFile = open(astFilePath, "r")
-    astString = astFile.read()
-    ast = json.loads(astString,"r" )
+    asts = []
+    for line in astFile:
+        if len(line) > 1:
+            asts.append(json.loads(line))
 
     # B) Reconstruct the code from AST
-    p1 = Popen(["/home/pa/Desktop/json_printer/bin/syntree/main", "--num_data_records=1",
+    p1 = Popen(["/home/pa/Desktop/json_printer/bin/syntree/main", "--num_data_records=" + str(len(asts)),
                 "--data=" + astFilePath,
                 "--logtostderr"], stderr=PIPE)
     jscode = p1.stderr.read().decode("utf-8")
     filteredJscode = []
-    jscodeLinePositions = [-1]
-    for line in jscode.split("\n"):
-        if not (line.startswith("I0")):
-            filteredJscode.append(line)
-            jscodeLinePositions.append(jscodeLinePositions[-1] + len(line) + 1) # add 1 for missing newline
-    jscode = '\n'.join(filteredJscode)
-    jscodeLinePositions[0] = 0 # I HAVE ABSOLUTLY NO CLUE, WHY THE MAPPING IS THAT STRANGE AND THERE IS ALWAYS AN OFFSET OF 1
+    jscodeLinePositions = []
+    resultJscode = []
+    for line in jscode.split("\n")[4:]:
+        if line.startswith("I0"):
+            filteredJscode.append([])
+            jscodeLinePositions.append([-1])
+        else:
+            filteredJscode[-1].append(line)
+            jscodeLinePositions[-1].append(jscodeLinePositions[-1][-1] + len(line) + 1) # add 1 for newline
+    for i, program in enumerate(filteredJscode):
+        resultJscode.append('\n'.join(program))
+        jscodeLinePositions[i][0] = 0 # I HAVE ABSOLUTLY NO CLUE, WHY THE MAPPING IS THAT STRANGE AND THERE IS ALWAYS AN OFFSET OF 1
    
     # C) Get the mapping from position in sourcefile to astNode by analysing the node
-    p2 = Popen(["/home/pa/Desktop/json_printer/bin/syntree/main", "--num_data_records=1",
+    p2 = Popen(["/home/pa/Desktop/json_printer/bin/syntree/main", "--num_data_records=" + str(len(asts)),
                 "--data=" + astFilePath,
                 "--mode=info", "--logtostderr"], stderr=PIPE)
     rawAstToCodeMapping = p2.stderr.read().decode("utf-8").split("\n")[4:]
     processedAstToCodeMapping = []
     for line in rawAstToCodeMapping:
-        processedAstToCodeMapping.append([int(x) for x in line[line.find("]")+2:].split()[1:] ])
-    mapping = {}
-    for node in ast[:-1]:
-        if node["type"] in ["FunctionExpression", "FunctionDeclaration", "CallExpression"]:
-            position = processedAstToCodeMapping[node["id"]]
-            mapping[jscodeLinePositions[position[0]-1] + position[1]] = node["id"]
+        parsedLine = line[line.find("]")+2:].split()
+        if len(parsedLine) == 0:
+            continue
+
+        if parsedLine[0] == "0":
+            processedAstToCodeMapping.append([])
+
+        processedAstToCodeMapping[-1].append([int(x) for x in parsedLine[1:] ])
+    mapping = []
+    for i, ast in enumerate(asts):
+        mapping.append({})
+        for node in ast[:-1]:
+            if node["type"] in ["FunctionExpression", "FunctionDeclaration", "CallExpression"]:
+                position = processedAstToCodeMapping[i][node["id"]]
+                mapping[-1][jscodeLinePositions[i][position[0]-1] + position[1]] = node["id"]
+
+    resultJscode[1] = resultJscode[1].replace('"use strict";\n',"")
+    resultJscode[1] = resultJscode[1].replace('module.exports = PathUtils;', "")
+
 
     # D) Create the callgraph with the AST nodes as entries
-    q = Popen(["node", "/home/pa/Desktop/js_call_graph/javascript-call-graph/main.js", "--cg", jscode], stdout=PIPE)
+    q = Popen(["node", "/home/pa/Desktop/js_call_graph/javascript-call-graph/main.js", "--cg", str(resultJscode[2])], stdout=PIPE)# "|||".join(resultJscode)], stdout=PIPE)
     callgraph = q.stdout.read().decode("utf-8")
-    mappedCallgraph = {}
+    mappedCallgraph =  [dict() for x in range(len(asts))]
     for line in callgraph.split("\n"):
         if not "->" in line:
             continue
         caller, target = line.split(" -> ")
+        callerAst = int(caller[0:caller.find("@")])
         callerPos = int(caller[caller.find(":")+1:caller.find("-") ])
-        if not callerPos in mapping:
+        if not callerPos in mapping[callerAst]:
             continue
-        caller = mapping[ callerPos ]
+        caller = mapping[callerAst][ callerPos ]
         if "@" in target:
+            targetAst = int(caller[0:caller.find("@")])
             targetPos = int(target[target.find(":")+1:target.find("-") ] )
-            if not targetPos in mapping:
+            if not targetPos in mapping[targetAst]:
                 continue
-            target = mapping[targetPos]
-        mappedCallgraph[caller] = target
+            target = (targetAst, mapping[targetAst][targetPos])
+            mappedCallgraph[callerAst][caller] = target
 
-    return ast, mappedCallgraph
+    return asts, mappedCallgraphs
 
 
 
@@ -579,7 +597,7 @@ def extract_histories(astsFilePath, testsFilePath = None):
     """ Extracts histories available in the designated files.
 
     Input:
-    astString:      Path to file containing that contain an abstract syntax tree
+    astString:      Path to file containing ASTs, one per line
     tests:          If the histories shall be reduced. Otherwise histories for all the
                     classes are given.
 

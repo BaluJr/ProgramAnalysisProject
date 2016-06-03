@@ -1,13 +1,14 @@
 This file shall be a place for writing down questions and thoughts:
 
 
+esprima.js for js_callgraph has error within parseSourceElement function for ast 2
 
  ################## PROBLEMS AND TODOS ####################:
 # - Cut away everything after the hole
+# - Making onEvents execute always !?
+# - Handling multiple AST
 #
-# Making onEvents execute always !?
-#
-# -Handling arrays
+# -Handling arrays -> General not like
 # -Handling ForIn -> like with arrays more or less Literal Handling!?
 #
 # -Break, Continue Statement
@@ -24,6 +25,9 @@ This file shall be a place for writing down questions and thoughts:
 # The javascript_call_graph project ignores underscores in variable names. Doesn't this may cause serious problems?
 # It regards calls to new XMLHttpRequest() but not to other not existing objects. How does the project know?
 
+# What to do about links in callgraph to default objects?
+
+# Handle the new js standard
 
  ################## PAPER ARGUMENTS ####################
 
