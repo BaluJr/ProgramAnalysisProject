@@ -12,14 +12,14 @@ UseTestingCodejs = False
 
 class history_extractor:
 
-    def __init__(self, ast, callgraph):
+    def __init__(self, asts, callgraphs):
         ''' Constructor immediatly sets ast and callgraph this extractor shall work on. 
         '''
-        self.ast = ast
-        self.callgraph = callgraph
+        self.asts = asts
+        self.callgraphs = callgraphs
         self.history = None
         self.outputHist = None
-        self.nodeToObject = {}
+        self.nodeToObject = [dict() for i in range(len(asts))]
 
     def generateHistories(self):
         ''' Creates the history for the ast and callgraph given during initialization
@@ -40,7 +40,7 @@ class history_extractor:
 
         Input:
             astObjects:     [optional] Specific nodes for which one wants to get
-                            the history.
+                            the history. Given by AST ID and NodeID
 
         Return:
             hist:           History in the output format defined in the paper.
@@ -64,9 +64,7 @@ class history_extractor:
             outputString = ""
             for astObject in astObjects:
                 treeId , nodeId = astObject.split("\t")
-                # At the moment only nodeNumber is used. Handling multiple asts has to be done depending on how needed
-                # for neural network
-                obj = self.nodeToObject[int(nodeId)]
+                obj = self.nodeToObject[int(treeId)][int(nodeId)]
 
                 startTag = "<" + treeId + "><" + nodeId + ">"
                 for concreteTrace in self.outputHist[obj]:
@@ -92,6 +90,7 @@ class history_extractor:
         returned by the Expressions is the only thing, that is done concerning histories.
 
         Input:
+            astNumber:      The ast the statement belongs to
             nodeNumber:     The node in the AST to analyse
             env:            EnvironmentObject containing the local and global environment with the 
                             mapping from variables to (possibly abstract) objects
@@ -102,7 +101,8 @@ class history_extractor:
         '''
        
         ### Get Statement and type 
-        curNode = self.ast[nodeNumber]
+        ast = self.asts[astNumber]
+        curNode = ast[nodeNumber]
         t = curNode["type"]
             
         ### Analyse the Statements based on type
@@ -158,7 +158,7 @@ class history_extractor:
             preceedingCaseConditions = []
             for case in curNode["children"][1:]:
                 condStates.append(state.copy())
-                case = self.ast[case]
+                case = ast[case]
                 innerHist = HistoryCollection()
                 # Handle previous case conditions
                 for precCaseCond in preceedingCaseConditions:
@@ -224,7 +224,7 @@ class history_extractor:
         ### Declarations (handled here toghether with Declarators)
         elif t == "VariableDeclaration":
             # There might be multiple declarators as eg. "var a = 4, b = 5"
-            for declarator in [self.ast[node] for node in curNode["children"]]:
+            for declarator in [ast[node] for node in curNode["children"]]:
                 # Create the local variable
                 state.env_createLocal(declarator["value"])
                 if "children" in declarator:
@@ -243,13 +243,14 @@ class history_extractor:
 
 
                                
-    def _analyseExpression(self, nodeNumber, state):
+    def _analyseExpression(self, astNumber, nodeNumber, state):
         ''' Analyses a single expression node. 
         In contrast to statements, expressions always have a return value.
         Expressions are the more interesting and difficult part since only 
         here instructions are really executed and histories get written.
 
         Input:
+            astNumber:      The ast the statement belongs to
             nodeNumber:     The node in the AST to analyse
             state:          The state of the current execution (contains environment, heap, objects)
 
@@ -262,8 +263,10 @@ class history_extractor:
                             For variable list has one member. For MemberExpressions two.
         '''
     
+
         ### Get Statement and handle each type 
-        curNode =self.ast[nodeNumber]
+        ast = self.asts[astNumber]
+        curNode =ast[nodeNumber]
         t = curNode["type"]   
 
         ### Identifier handled together with expression
@@ -272,7 +275,7 @@ class history_extractor:
             # For realizing the histories for specific nodes: Store to which object this node belongs to
             object = state.env_get(curNode["value"])
             if object != None:
-                self.nodeToObject[nodeNumber] = object
+                self.nodeToObject[astNumber][nodeNumber] = object
             return HistoryCollection(), [curNode["value"]]
         ### Expressions
         elif t == "ThisExpression":
@@ -292,7 +295,7 @@ class history_extractor:
             obj = state.newObject("ObjectExpression", 0, nodeNumber)
             hist = HistoryCollection()
             for child in curNode["children"]:
-                prop = self.ast[child]
+                prop = ast[child]
                 tmpHist, propertyValue = self._analyseExpression(prop["children"][0], state)
                 hist.addHistoryCollection(tmpHist)
                 state.heap_add(obj, prop["value"], propertyValue)
@@ -331,9 +334,9 @@ class history_extractor:
                     state.env_set(leftRet[0], rightRet)
 
                     # Do the nodeToObject mapping when single assignment
-                    potentialIdentifier = self.ast[curNode["children"][0]]
+                    potentialIdentifier = ast[curNode["children"][0]]
                     if potentialIdentifier["type"] == "Identifier": #TODO HIER MUSS ICH ES IRGENDWIE SCHAFFEN DAS MAPPING VON IDENTIFIER ZU NODE RICHTIG ZU MACHEN!
-                        self.nodeToObject[potentialIdentifier["id"]] = rightRet
+                        self.nodeToObject[astNumber][potentialIdentifier["id"]] = rightRet
                 else:
                     # When two elements in list do over heap
                     state.heap_add(leftRet[0],leftRet[1], rightRet)
@@ -386,9 +389,9 @@ class history_extractor:
             stored in the environment needed for calculation!
             """   
             
-            if (self.ast[curNode["children"][0]]["type"] == "FunctionExpression"):
+            if (ast[curNode["children"][0]]["type"] == "FunctionExpression"):
                 # Set the function  (in this case salways available)
-                fnNode = self.ast[curNode["children"][0]]
+                fnNode = ast[curNode["children"][0]]
 
                 # Create the subfunction context   
                 subfunctionState = state.prepareForSubfunction(state.context, "anonym"+str(nodeNumber))
@@ -396,40 +399,43 @@ class history_extractor:
                     hist, tmpRet = self._analyseExpression(param, state)
                     subfunctionState.env_set(fnNode["children"][i+1]["value"],tmpRet)
 
-            elif  (self.ast[curNode["children"][0]]["type"] == "MemberExpression"):
+            elif  (ast[curNode["children"][0]]["type"] == "MemberExpression"):
                 hist, ret = self._analyseExpression(curNode["children"][0], state)
                 
                 # Set the function (at the moment ignore document and window links)
-                if not curNode["id"] in self.callgraph or not isinstance(self.callgraph[curNode["id"]],int):
+                if not curNode["id"] in self.callgraphs[astNumber] or not isinstance(self.callgraphs[astNumber][curNode["id"]],int):
                     newObj = state.newObject("anonymous", 0,curNode["id"])
                     hist.addEventToHistory(newObj, ret[-1], "ret", state.functionName)
                     return hist, newObj
 
                 # Otherwise set the function and functioncontext
-                fnNode = self.ast[self.callgraph[curNode["id"]]]
+                astId, nodeId = self.callgraphs[astNumber][curNode["id"]]
+                fnNode = self.asts[astId][nodeId]
                 subfunctionState = state.prepareForSubfunction(state.getTarget(ret[:-1]), ret[-1])
                 for i, param in enumerate(curNode["children"][1:]):
                     tmpHist, tmpRet = self._analyseExpression(param, subfunctionState)
                     hist.addHistoryCollection(tmpHist)    
                     subfunctionState.env_set(fnNode["children"][i+1]["value"],tmpRet)
 
-            elif (self.ast[curNode["children"][0]]["type"] == "Identifier"):
+            elif (ast[curNode["children"][0]]["type"] == "Identifier"):
                 hist = HistoryCollection()
 
                 # When no callinformation, only add event to history and create potential object
-                if not curNode["id"] in self.callgraph or not isinstance(self.callgraph[curNode["id"]],int):
+                if not curNode["id"] in self.callgraphs[astNumber] or not isinstance(self.callgraphs[astNumber][curNode["id"]],int):
                     newObj = state.newObject("anonymous", 0, curNode["id"])
-                    hist.addEventToHistory(newObj,self.ast[curNode["children"][0]]["type"],"ret",state.functionName)
+                    hist.addEventToHistory(newObj,ast[curNode["children"][0]]["type"],"ret",state.functionName)
                     return hist, newObj
 
                 # Otherwise set the function and functioncontext
-                fnNode = self.ast[self.callgraph[curNode["id"]]]
-                subfunctionState = state.prepareForSubfunction(state.context, self.ast[curNode["children"][0]]["value"])
+                astId, nodeId = self.callgraphs[astNumber][curNode["id"]]
+                fnNode = self.asts[astId][nodeId]
+
+                subfunctionState = state.prepareForSubfunction(state.context, ast[curNode["children"][0]]["value"])
                 for i, param in enumerate(curNode["children"][1:]):
                     tmpHist, tmpRet = self._analyseExpression(param, state)
                     hist.addHistoryCollection(tmpHist)
                     tmpRet = state.getTarget(tmpRet)
-                    parameterName = self.ast[fnNode["children"][i+1]]["value"]
+                    parameterName = ast[fnNode["children"][i+1]]["value"]
                     subfunctionState.env_createLocal(parameterName)
                     subfunctionState.env_set(parameterName,tmpRet)
 
@@ -444,7 +450,7 @@ class history_extractor:
             return hist, ret
 
         elif t == "NewExpression":
-            return HistoryCollection(), state.newObject(self.ast[curNode["children"][0]]["value"], 0, nodeNumber)
+            return HistoryCollection(), state.newObject(ast[curNode["children"][0]]["value"], 0, nodeNumber)
             
         elif t == "SequenceExpression":
             # Multiple expressions. 
