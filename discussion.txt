@@ -5,8 +5,8 @@ esprima.js for js_callgraph has error within parseSourceElement function for ast
 
  ################## PROBLEMS AND TODOS ####################:
 # - Cut away everything after the hole
-# - Making onEvents execute always !?
-# - Handling multiple AST
+# - Making onEvents execute always !? Making functions be always called
+# - New Statement with complex names (Only keep the classname)
 #
 # -Handling arrays -> General not like
 # -Handling ForIn -> like with arrays more or less Literal Handling!?
@@ -17,10 +17,6 @@ esprima.js for js_callgraph has error within parseSourceElement function for ast
 #
 # Decide what how to handle anonymous objects, where not clear what classname is. They are kept in history when
 # at least one additional operation is performed on them. But they are excluded in output (line 71).
-#
-# Handling multiple AST per file and in format like needed by NeuralNetwork. Not done yet since unknown what necessary
-
-# Only a temporal switch for debugging- whether to read the json from program.js or own code from IsolatedCode.js
 
 # The javascript_call_graph project ignores underscores in variable names. Doesn't this may cause serious problems?
 # It regards calls to new XMLHttpRequest() but not to other not existing objects. How does the project know?
@@ -28,6 +24,9 @@ esprima.js for js_callgraph has error within parseSourceElement function for ast
 # What to do about links in callgraph to default objects?
 
 # Handle the new js standard
+
+# What to do when objects are unknown? So access to global objects that are not assigned yet
+
 
  ################## PAPER ARGUMENTS ####################
 
