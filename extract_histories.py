@@ -35,7 +35,7 @@ class history_extractor:
 
         
 
-    def getHistoryString(self, astObjects = None):
+    def getHistoryString(self, astObjects = None, cutAtHoles = False):
         ''' Returns the created history
         Depending on whether specific nodes are given as parameter or not 
         it gives a list of those histories or a list of otherwise a list
@@ -44,6 +44,8 @@ class history_extractor:
         Input:
             astObjects:     [optional] Specific nodes for which one wants to get
                             the history. Given by AST ID and NodeID
+            cutAtHoles:     Whether only the histories until the hole shall be returned
+                            This is necessary for predicting suggestions.
 
         Return:
             hist:           History in the output format defined in the paper.
@@ -57,9 +59,9 @@ class history_extractor:
                 if obj.startswith("anonymous"):
                     continue
 
-                classTag = "<" + obj.split("_")[0] + ">"
+                classTag = "<" + obj.split("-")[0] + ">"
                 for concreteTrace in self.outputHistories[obj]:
-                    #outputString += classTag
+                    outputString += classTag
                     for event in concreteTrace:
                         outputString += "<" + ','.join([str(event[i]) for i in range(4)])  + ">"
                     outputString += "\n"
@@ -582,10 +584,6 @@ def prepare_files(astFilePath):
             if node["type"] in ["FunctionExpression", "FunctionDeclaration", "CallExpression"]:
                 position = processedAstToCodeMapping[i][node["id"]]
                 mapping[-1][jscodeLinePositions[i][position[0]-1] + position[1]] = node["id"]
-
-    resultJscode[1] = resultJscode[1].replace('"use strict";\n',"")
-    resultJscode[1] = resultJscode[1].replace('module.exports = PathUtils;', "")
-
 
     # D) Create the callgraph with the AST nodes as entries
     q = Popen(["node", "/home/pa/Desktop/js_call_graph/javascript-call-graph/main.js", "--cg", "|||".join(resultJscode)], stdout=PIPE)

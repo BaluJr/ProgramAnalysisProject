@@ -48,7 +48,7 @@ class State(object):
         Output:
             objName:        "objectClass_astId:astNodeId"
         '''
-        name =  objectClass + "_" + str(astId) + ":" + str(astNodeId)
+        name =  objectClass + "-" + str(astId) + ":" + str(astNodeId)
         self.heap[name] = {}
         return name
 
