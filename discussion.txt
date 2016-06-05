@@ -5,7 +5,7 @@ esprima.js for js_callgraph has error within parseSourceElement function for ast
 
  ################## PROBLEMS AND TODOS ####################:
 # - Cut away everything after the hole (cutAtHoles in getHistoriyStrings)
-# - Making onEvents execute always !? Making functions be always called
+# - Making onEvents execute always !? Making functions be always called!
 # - New Statement with complex names (Only keep the classname)
 #
 # -Handling arrays -> General not like
@@ -14,9 +14,6 @@ esprima.js for js_callgraph has error within parseSourceElement function for ast
 # -Break, Continue Statement
 # -Looking how to handle Return and historiy extension etc for recursive functions
 #  (because then check, whether last history element equals to state.functionName, makes problem
-#
-# Decide what how to handle anonymous objects, where not clear what classname is. They are kept in history when
-# at least one additional operation is performed on them. But they are excluded in output (line 71).
 
 # The javascript_call_graph project ignores underscores in variable names. Doesn't this may cause serious problems?
 # It regards calls to new XMLHttpRequest() but not to other not existing objects. How does the project know?

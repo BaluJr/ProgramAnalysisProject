@@ -239,7 +239,8 @@ class history_extractor:
                 else:
                     return HistoryCollection()
         elif t == "FunctionDeclaration": 
-            # Doing nothing since calls are handled by the callgraph
+            # Although also executed from calls over callgraph, each function
+            # also executed on its own to also analyse dead code.
             return HistoryCollection()
         
         # For all other nodes, where no specific strategy has been assigned
