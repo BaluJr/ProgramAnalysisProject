@@ -29,6 +29,8 @@ class history_extractor:
         ''' Creates the history for the ast and callgraph given during initialization
         No input and no return.
         '''
+        
+        # Then write the histories of the real walk throughs
         for astNumber in range(len(self.asts)):
             state = State()
             self.histories.append(self._analyseStatement(astNumber, 0, state))
@@ -52,7 +54,10 @@ class history_extractor:
         Return:
             hist:           History in the output format defined in the paper.
         '''
-
+        
+        # First write the histories from the isolated function execution
+        for functionHistory in self.isolatedFunctionHistories:
+            print("I am there")
 
         if astObjects == None:
             # If return histories for whole classes, cut away the object numbers
@@ -241,8 +246,17 @@ class history_extractor:
                 else:
                     return HistoryCollection()
         elif t == "FunctionDeclaration": 
-            # Although also executed from calls over callgraph, each function
-            # also executed on its own to also analyse dead code.
+            # Execute isolated and store in the separate history.
+            # Since I remember the ObjectName, afterwards the longest history per object can be taken
+            isolatedExpressionState = State()
+            for i, param in enumerate(curNode["children"][1:]):
+                parameterName = ast[curNode["children"][i+1]]["value"]
+                isolatedExpressionState.env_createLocal(parameterName)
+
+            fnHist = self._analyseStatement(astNumber, curNode["children"][-1], isolatedExpressionState)
+            self.isolatedFunctionHistories.append(fnHist)
+            ret = subfunctionState.env_get("__return__")
+            # For the run through history, there is no effect
             return HistoryCollection()
         
         # For all other nodes, where no specific strategy has been assigned
@@ -308,19 +322,19 @@ class history_extractor:
                 hist.addHistoryCollection(tmpHist)
                 state.heap_add(obj, prop["value"], propertyValue)
             return hist, obj
-        elif t == "FunctionExpression":
 
-            if (ast[curNode["children"][0]]["type"] == "FunctionExpression"):
-                # Execite isolate
-                isolatedExpressionState = State()
-                for i, param in enumerate(curNode["children"][1:]):
-                    parameterName = ast[curNode["children"][i+1]]["value"]
-                    isolatedExpressionState.env_createLocal(parameterName)
+        elif t == "FunctionExpression":
+            # Execute isolated and store in the separate history.
+            # Since I remember the ObjectName, afterwards the longest history per object can be taken
+            isolatedExpressionState = State()
+            for i, param in enumerate(curNode["children"][1:]):
+                parameterName = ast[curNode["children"][i+1]]["value"]
+                isolatedExpressionState.env_createLocal(parameterName)
 
             fnHist = self._analyseStatement(astNumber, curNode["children"][-1], isolatedExpressionState)
             self.isolatedFunctionHistories.append(fnHist)
             ret = subfunctionState.env_get("__return__")
-
+            # For the run through history, there is no effect
             return HistoryCollection(), None
 
         # Unary operations
