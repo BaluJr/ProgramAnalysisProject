@@ -21,12 +21,14 @@ class history_extractor:
         self.outputHistories = {}
         self.nodeToObject = [dict() for i in range(len(asts))]
 
+        # The histories created by executed all functions separately
+        self.isolatedFunctionHistories = []
+
+
     def generateHistories(self):
         ''' Creates the history for the ast and callgraph given during initialization
         No input and no return.
         '''
-
-        histories = []
         for astNumber in range(len(self.asts)):
             state = State()
             self.histories.append(self._analyseStatement(astNumber, 0, state))
@@ -307,6 +309,18 @@ class history_extractor:
                 state.heap_add(obj, prop["value"], propertyValue)
             return hist, obj
         elif t == "FunctionExpression":
+
+            if (ast[curNode["children"][0]]["type"] == "FunctionExpression"):
+                # Execite isolate
+                isolatedExpressionState = State()
+                for i, param in enumerate(curNode["children"][1:]):
+                    parameterName = ast[curNode["children"][i+1]]["value"]
+                    isolatedExpressionState.env_createLocal(parameterName)
+
+            fnHist = self._analyseStatement(astNumber, curNode["children"][-1], isolatedExpressionState)
+            self.isolatedFunctionHistories.append(fnHist)
+            ret = subfunctionState.env_get("__return__")
+
             return HistoryCollection(), None
 
         # Unary operations
