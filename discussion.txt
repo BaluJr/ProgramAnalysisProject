@@ -5,8 +5,12 @@ esprima.js for js_callgraph has error within parseSourceElement function for ast
 
  ################## PROBLEMS AND TODOS ####################:
 # - Cut away everything after the hole (cutAtHoles in getHistoriyStrings)
-# - Making onEvents execute always !? Making functions be always called!
-# - New Statement with complex names (Only keep the classname)
+#
+# -Include parameters as anonymous object
+#
+# - Recognize the jquery object
+#
+# Call in Call
 #
 # -Handling arrays -> General not like
 # -Handling ForIn -> like with arrays more or less Literal Handling!?

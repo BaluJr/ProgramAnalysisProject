@@ -1,23 +1,28 @@
+a = new x.google.y.Camera()
+a.Open()
+a.Close()
+
+
 // The original Testcode
-(function()  {
-   var httpRequest;
-   document.getElementById("ajaxButton").onclick = (function()  {
-      makeRequest("test.html");
-   }
-);
-   function makeRequest(url)  {
-      httpRequest = new XMLHttpRequest();
-      if (! httpRequest)  {
-         alert("Giving up :( Cannot create an XMLHTTP instance");
-         return false;
-      }
-      httpRequest.onreadystatechange = alertContents;
-      httpRequest.open("GET", url);
-      httpRequest.send();
-   }
-;
-}
-)();
+//(function()  {
+//   var httpRequest;
+//   document.getElementById("ajaxButton").onclick = (function()  {
+//      makeRequest("test.html");
+//   }
+//);
+//   function makeRequest(url)  {
+//      httpRequest = new XMLHttpRequest();
+//      if (! httpRequest)  {
+//         alert("Giving up :( Cannot create an XMLHTTP instance");
+//         return false;
+//      }
+//      httpRequest.onreadystatechange = alertContents;
+//      httpRequest.open("GET", url);
+//      httpRequest.send();
+//   }
+//;
+//}
+//)();
 
 //a = new T() || new Z();
 //a.test();
@@ -120,4 +125,6 @@ a.Test4()
 //   }
 //;
 //}
-//)();*/
+{'XMLHttpRequest-0:29': [[('onreadystatechange', 0, 0, '-'), ('open', 0, 0, '-'), ('send', 0, 0, '-')]]}
+
+*/

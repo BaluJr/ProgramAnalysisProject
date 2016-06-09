@@ -22,11 +22,11 @@ class State(object):
         
         # From ENV
         # Environment is split into the local and global one
-        self.localEnvironment = {}
+        self.localEnvironment = {"__return__": None}
         self.globalEnvironment = {"window": "window-0:0", "document": "document-0:0", "__this__": "window-0:0"}
         # Two special fields necessary for administration
-        self.functionName = None
-        self.context = "window"
+        self.functionName = "lambdaExpression"
+        self.context = "window-0:0"
 
 
 
@@ -65,7 +65,14 @@ class State(object):
 
         Input:
             objs:   List of objects to merge
+
+        Output:
+            mergedObject: The object that was merged as result
         """
+
+        objs = [obj for obj in objs if obj != None]
+        if len(objs) == 0:
+            return None
 
         # Determine which most abstract objects have to be merged
         mostAbstractObjs = set()
@@ -156,9 +163,11 @@ class State(object):
         if isinstance(accessorList, (int, float, bool)):
             return None
 
+        # When already a concrete object
         if not isinstance(accessorList, (list)):
             return accessorList
 
+        # Return the target
         if len(accessorList) == 1:
             result = self.env_get(accessorList[0])
         else:
@@ -293,7 +302,6 @@ class State(object):
         subfunctionState.heap = self.heap
         subfunctionState.functionName = functionName
         subfunctionState.context = functionContext
-        subfunctionState.env_createLocal("__return__")
         return subfunctionState
 
 

@@ -123,6 +123,10 @@ class HistoryCollection(object):
     def toOutputFormat(self, objectCollection):
         """ Do the postprocessing for created history
         Remove empty results and anonymous objecs, that were not used.
+
+        Input:
+            state:  The state that was built together with the history.
+                    Used to resolve the abstract objects.
         """
         history = self._toOutputFormatInner(objectCollection, 0)
 

@@ -75,7 +75,7 @@ class Env(object):
 
 
 
-    def get(self, var):
+    def get(self, var: object) -> object:
         '''Looks for existance of a variable in environment
         Returns local one if exists. Else global one. Else None.
         Is the original object, which has been assigned. Afterwards
