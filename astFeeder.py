@@ -30,8 +30,8 @@ def extract(queueIn, queueOut):
 
         # Try to extract the histories
         try:
-            history = extract_histories.extract_histories(pathToData + fileName)
-            result = (fileName, "hist", history)
+            historyAndVars = extract_histories.extract_histories(pathToData + fileName)
+            result = (fileName, "hist", historyAndVars)
         except CustomExceptions.CallgraphException as e:
             print("Callgraph error in " + fileName)
             result = (fileName, "err", "Callgraph")
@@ -56,23 +56,35 @@ def store(queue, test):
     time.sleep(10)
     while i < OverallAmountOfFiles:
         try:
-            fileName, type, hist = queue.get(block=False)
+            fileName, type, histAndVars = queue.get(block=False)
         except:
             time.sleep(10)
             continue
 
         print("Storing " + fileName)
-        # Create a dedicated file
-        file = open(pathToData + fileName[:-5] + ".hist", "w+")
-        file.write(hist)
-        file.close()
 
-        # Also write to the overall files
+        # When successfull
         if type == "hist":
+            hist = histAndVars[0]
+            vars = histAndVars[1:]
             completeHistoryFile.write(hist + "\n")
             projectsStatusFile.write("OK       : " + fileName + "\n")
+
+            # Create a dedicated file for history
+            file = open(pathToData + fileName[:-5] + ".hist", "w+")
+            file.write(hist)
+            file.close()
+
+            # Create a dedicated file for usage
+            file = open(pathToData + fileName[:-5] + ".env", "w+")
+            for vartype in vars:
+                for classname in vartype:
+                    file.write(classname + " ")
+                file.write("\n")
+            file.close()
+        # Else only write status message
         else:
-            projectsStatusFile.write(hist + ": " + fileName + "\n")
+            projectsStatusFile.write(histAndVars + ": " + fileName + "\n")
         i += 1
 
     projectsStatusFile.close()
@@ -87,9 +99,9 @@ if __name__ == "__main__":
 
     # Create list of the interesting files
     jsonFiles = []
-    prefixList = ["a","b","c"]
+    prefixList = ["d", "e", "f", "g", "h", "i", "j", "k", "l"]
     for fileName in os.listdir(pathToData):
-        if fileName.endswith(".json") and fileName.startswith("creativemarket"): #fileName[0] in prefixList:
+        if fileName.endswith(".json") and fileName[0] in prefixList: #fileName.startswith("dachcom-digital"):
             jsonFiles.append(fileName)
     OverallAmountOfFiles = len(jsonFiles)
 
@@ -109,12 +121,12 @@ if __name__ == "__main__":
     # Start the pipeline
     for p in calcProc:
         p.start()
-    #writProc.start()
+    writProc.start()
 
     # Make sure that everything ran through
     for p in calcProc:
         p.join()
-    #writProc.join()
+    writProc.join()
 
     print("FINISHED!")
     print(time.time() - start)

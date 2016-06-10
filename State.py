@@ -238,6 +238,7 @@ class State(object):
         elif var in self.globalEnvironment:
             return self.getAbstractObject(self.globalEnvironment[var])
         else:
+            self.globalEnvironment[var] = None
             return None
 
         

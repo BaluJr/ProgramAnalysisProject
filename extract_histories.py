@@ -33,16 +33,24 @@ class history_extractor:
         # The histories created by executed all functions separately
         self.isolatedFunctionHistories = []
 
+        # Necessary for handling the altered prototypes to group which classes belong together
+        self.globallyPrototypedClasses = set()
+        self.globallyOfferedClasses = set()
+        self.globallyUnknownVariables = set()
+
+        # An additional place for storing for which object there exists an hole
+        self.holeObjects = {}
 
     def generateHistories(self):
         ''' Creates the history for the ast and callgraph given during initialization
         No input and no return.
         '''
-        
+
         # Then write the histories of the real walk throughs
         for astNumber in range(len(self.asts)):
             state = State()
             self.histories.append(self._analyseStatement(astNumber, 0, state))
+
             outputForAST = self.histories[-1].toOutputFormat(state)
             self.outputHistories.update(outputForAST)
 
@@ -53,8 +61,22 @@ class history_extractor:
             functionHistory.update(self.outputHistories)
             self.outputHistories = functionHistory
 
+        self.globallyOfferedClasses = set(
+            [classname for classname in state.globalEnvironment
+             if classname[0].isupper() and state.globalEnvironment[classname] != None]
+        )
+        if state.context == "window-0:0":
+            for classname in state.localEnvironment:
+                if classname[0].isupper():
+                    self.globallyOfferedClasses.add(classname)
 
-    def getHistoryString(self, astObjects = None, cutAtHoles = False):
+        # Don't know whether better name them variable or class
+        self.globallyUnknownVariables = set(
+            [variable for variable in state.globalEnvironment
+             if variable[0].isupper() and state.globalEnvironment[variable] == None])
+        i=1
+
+    def getHistoryString(self, astObjects = None, hole = False):
         ''' Returns the created history
         Depending on whether specific nodes are given as parameter or not 
         it gives a list of those histories or a list of otherwise a list
@@ -70,23 +92,19 @@ class history_extractor:
             hist:           History in the output format defined in the paper.
         '''
 
-        if astObjects == None:
-            # If return histories for whole classes, cut away the object numbers
+        if hole == True:
+            astObjects = set(self.holeObjects.values())
             outputString = ""
-            for obj in self.outputHistories:
-                if obj.startswith("anonymous"):
-                    continue
-
-                classTag = "<" + obj.split("-")[0] + ">"
+            for obj in astObjects:
                 for concreteTrace in self.outputHistories[obj]:
-                    outputString += classTag
                     for event in concreteTrace:
-                        outputString += "<" + ','.join([str(event[i]) for i in range(4)])  + ">"
+                        outputString += "<" + ','.join([str(event[i]) for i in range(4)]) + ">"
                     outputString += "\n"
-        else:
+
+        elif astObjects != None:
             outputString = ""
             for astObject in astObjects:
-                treeId , nodeId = astObject.split("\t")
+                treeId, nodeId = astObject.split("\t")
                 obj = self.nodeToObject[int(treeId)][int(nodeId)]
 
                 startTag = "<" + treeId + "><" + nodeId + ">"
@@ -95,7 +113,44 @@ class history_extractor:
                     for event in concreteTrace:
                         outputString += "<" + ','.join([str(event[i]) for i in range(4)]) + ">"
                     outputString += "\n"
+
+        else:
+            # If return histories for whole classes, cut away the object numbers
+            outputString = ""
+            for obj in self.outputHistories:
+                #if obj.startswith("anonymous"):
+                #    continue
+
+                classTag = "<" + obj.split("-")[0] + ">"
+                for concreteTrace in self.outputHistories[obj]:
+                    outputString += classTag
+                    for event in concreteTrace:
+                        outputString += "<" + ','.join([str(event[i]) for i in range(4)])  + ">"
+                    outputString += "\n"
+
         return outputString
+
+
+
+    def getGloballyPrototypedClasses(self):
+        return self.globallyPrototypedClasses
+
+    def getGloballyOfferedClasses(self):
+        return self.globallyOfferedClasses
+
+    def getGloballyUnknownClasses(self):
+        return self.globallyUnknownVariables
+
+    def getGloballyUsedClasses(self):
+        usedClasses = set()
+        for obj in self.outputHistories:
+            if obj.startswith("anonymous"):
+                continue
+            obj = obj.split("-")[0]
+            obj = obj[0].upper() + obj[1:]
+            usedClasses.add(obj)
+        return usedClasses
+
 
 
     def _analyseStatement(self, astNumber, nodeNumber, state):
@@ -317,12 +372,18 @@ class history_extractor:
 
         ### Identifier handled together with expression
         if t in ["Identifier", "Property"]:
+            # Special case for holes
+            if curNode["value"] == "_questionmark_":
+                return HistoryCollection(), ["_questionmark_"]
 
             # For realizing the histories for specific nodes: Store to which object this node belongs to
             object = state.env_get(curNode["value"])
             if object != None:
                 self.nodeToObject[astNumber][nodeNumber] = object
+
+            # Besides that return the identifier
             return HistoryCollection(), [curNode["value"]]
+
         ### Expressions
         elif t == "ThisExpression":
             # the this is only a special local variable
@@ -381,7 +442,6 @@ class history_extractor:
         elif t == "AssignmentExpression":
             # Execute expressions and assign right to left, AssignmentOperation missing in Parser!
             # Good news: javascript gives error when callexpression on left site of assignment
-            # TODO: When it is a "on..." Property -> Execute the functionExpression in Behind
             hist, leftRet = self._analyseExpression(astNumber, curNode["children"][0], state)
             rightHist, rightRet = self._analyseExpression(astNumber, curNode["children"][1], state)
             rightRet = state.getTarget(rightRet) # need only target
@@ -393,7 +453,7 @@ class history_extractor:
 
                     # Do the nodeToObject mapping when single assignment
                     potentialIdentifier = ast[curNode["children"][0]]
-                    if potentialIdentifier["type"] == "Identifier": #TODO HIER MUSS ICH ES IRGENDWIE SCHAFFEN DAS MAPPING VON IDENTIFIER ZU NODE RICHTIG ZU MACHEN!
+                    if potentialIdentifier["type"] == "Identifier":
                         self.nodeToObject[astNumber][potentialIdentifier["id"]] = rightRet
                 else:
                     # When two elements in list do over heap
@@ -417,13 +477,30 @@ class history_extractor:
             
         elif t == "MemberExpression":
             hist, leftRet = self._analyseExpression(astNumber, curNode["children"][0], state)
-            leftRet = state.getTarget(leftRet) # we use target
+            leftRetTarget = state.getTarget(leftRet) # we use target
+
+            # If prototype, return yourself immediatly but additionally mark the given class variable as
+            # modified by the code
+            if (ast[curNode["children"][1]]["value"] == "prototype"):
+                if isinstance(leftRet, list):
+                    if len(leftRet) == 1:
+                        self.globallyPrototypedClasses.add(leftRet[0])
+                    else:
+                        self.globallyPrototypedClasses.add(leftRet[1])
+                else:
+                    self.globallyPrototypedClasses.add(leftRet)
+                return hist, leftRetTarget
+
             rightHist, rightRet = self._analyseExpression(astNumber, curNode["children"][1], state)
             rightRet = rightRet[0] # we use value
+
+            if rightRet == "_questionmark_":
+                self.holeObjects[astNumber] = leftRetTarget
+
             hist.addHistoryCollection(rightHist)
-            if leftRet != None:
-                hist.addEventToHistory(leftRet, rightRet, 0, state.functionName)
-            return hist, [leftRet, rightRet]
+            if leftRetTarget != None:
+                hist.addEventToHistory(leftRetTarget, rightRet, 0, state.functionName)
+            return hist, [leftRetTarget, rightRet]
 
         elif t == "ConditionalExpression":
             hist, ret = self._analyseExpression(astNumber, curNode["children"][0], state)
@@ -456,7 +533,7 @@ class history_extractor:
             if (ast[curNode["children"][0]]["type"] == "FunctionExpression"):
                 hist = HistoryCollection()
 
-                # Set the function  (in this case salways available)
+                # Set the function  (in this case always available)
                 fnNode = ast[curNode["children"][0]]
 
                 # Create the subfunction context   
@@ -468,12 +545,24 @@ class history_extractor:
                     parameterName = ast[fnNode["children"][i]]["value"]
                     subfunctionState.env_createLocal(parameterName)
                     subfunctionState.env_set(parameterName,tmpRet)
+                    if tmpRet != None:
+                        hist.addEventToHistory(tmpRet, "lamda", i, state.functionName)
 
             elif  (ast[curNode["children"][0]]["type"] == "MemberExpression"):
                 hist, ret = self._analyseExpression(astNumber, curNode["children"][0], state)
-                
+                functionName = ast[ast[curNode["children"][0]]["children"][1]]["value"]
+
                 # Set the function (at the moment ignore document and window links)
                 if not curNode["id"] in self.callgraphs[astNumber] or not isinstance(self.callgraphs[astNumber][curNode["id"]],int):
+                    # Add the call to the object given as a parameter
+                    for i, param in enumerate(curNode["children"][1:]):
+                        tmpHist, tmpRet = self._analyseExpression(astNumber, param, state)
+                        hist.addHistoryCollection(tmpHist)
+                        tmpRet = state.getTarget(tmpRet)
+                        if tmpRet != None:
+                            hist.addEventToHistory(tmpRet, functionName, i+1, state.functionName)
+
+                    # return at least an anonymous return object
                     newObj = state.newObject("anonymous", astNumber, curNode["id"])
                     hist.addEventToHistory(newObj, ret[-1], "ret", state.functionName)
                     return hist, newObj
@@ -483,12 +572,14 @@ class history_extractor:
                 fnNode = self.asts[astId][nodeId]
                 subfunctionState = state.prepareForSubfunction(state.getTarget(ret[:-1]), ret[-1])
                 for i, param in enumerate(curNode["children"][1:]):
-                    tmpHist, tmpRet = self._analyseExpression(astNumber, param, subfunctionState)
+                    tmpHist, tmpRet = self._analyseExpression(astNumber, param, state)
                     hist.addHistoryCollection(tmpHist)    
                     tmpRet = state.getTarget(tmpRet)
                     parameterName = ast[fnNode["children"][i+1]]["value"]
                     subfunctionState.env_createLocal(parameterName)
                     subfunctionState.env_set(parameterName,tmpRet)
+                    if tmpRet != None:
+                        hist.addEventToHistory(tmpRet, curNode["value"], i+1, state.functionName)
 
             elif (ast[curNode["children"][0]]["type"] == "Identifier"):
                 hist = HistoryCollection()
@@ -497,6 +588,14 @@ class history_extractor:
                 if not curNode["id"] in self.callgraphs[astNumber] or not isinstance(self.callgraphs[astNumber][curNode["id"]],int):
                     newObj = state.newObject("anonymous", astNumber, curNode["id"])
                     hist.addEventToHistory(newObj,ast[curNode["children"][0]]["type"],"ret",state.functionName)
+                    # Add the call to the object given as a parameter
+                    functionName = ast[curNode["children"][0]]["value"]
+                    for i, param in enumerate(curNode["children"][1:]):
+                        tmpHist, tmpRet = self._analyseExpression(astNumber, param, state)
+                        hist.addHistoryCollection(tmpHist)
+                        tmpRet = state.getTarget(tmpRet)
+                        if tmpRet != None:
+                            hist.addEventToHistory(tmpRet, functionName, i+1, state.functionName)
                     return hist, newObj
 
                 # Otherwise set the function and functioncontext
@@ -511,9 +610,11 @@ class history_extractor:
                     parameterName = ast[fnNode["children"][i+1]]["value"]
                     subfunctionState.env_createLocal(parameterName)
                     subfunctionState.env_set(parameterName,tmpRet)
+                    if tmpRet != None:
+                        hist.addEventToHistory(tmpRet, ast[curNode["children"][0]]["value"], i+1, state.functionName)
 
             elif  (ast[curNode["children"][0]]["type"] == "CallExpression"):
-                return HistoryCollection(), None # BEHANDELN
+                return HistoryCollection(), None    #TODO
 
             else:
                 raise("CallExpression has a unknown child for node" + nodeNumber);
@@ -716,7 +817,7 @@ def prepare_files(astFilePath):
 
 
 
-def extract_histories(astsFilePath, testsFilePath = None, cutAtHoles = False):
+def extract_histories(astsFilePath, testsFilePath = None, testOnHoles = False):
     """ Extracts histories available in the designated files.
 
     Input:
@@ -724,7 +825,7 @@ def extract_histories(astsFilePath, testsFilePath = None, cutAtHoles = False):
     testsFilePath:      If the histories shall be reduced. Otherwise histories for all the
                         classes are given.
     cutAtHoles:         Whether only the histories until the hole shall be returned
-                        Tis is necessary for predicting suggestions.
+                        This is necessary for predicting suggestions.
 
     Output:
     histories:      List of history objects as a string, formatted like in the paper.
@@ -737,16 +838,31 @@ def extract_histories(astsFilePath, testsFilePath = None, cutAtHoles = False):
 
     # Analyse the given ast with help of the callgraph and return result
     hist_extractor = history_extractor(asts, callgraphs, astsFilePath)
+
     hist_extractor.generateHistories()
+
+    # Test the access
+    protos = hist_extractor.getGloballyPrototypedClasses()
+    uses = hist_extractor.getGloballyUsedClasses()
+    offered = hist_extractor.getGloballyOfferedClasses()
+    unknowns = hist_extractor.getGloballyUnknownClasses()
+
+    # Get the histories (format depends, on wheter testsFilePath given or not)
+    tests = None
+    if testsFilePath != None:
+        tests = open(testFilePath, "r").read().split("\n")
+    historiesString = hist_extractor.getHistoryString(tests, testOnHoles)
+    return historiesString, protos, uses, offered, unknowns
+
 
     # Get the histories (format depends, on wheter testsFilePath given or not)
     tests = None
     if testsFilePath != None:
         tests = open(testFilePath, "r").read().split("\n")
     historiesString = hist_extractor.getHistoryString(tests, cutAtHoles)
+    return historiesString, protos, uses, offered, unknowns
+
     return historiesString
-
-
 
 
 
@@ -771,7 +887,7 @@ if __name__ == "__main__":
     testFilePath = sys.argv[2]
 
     # Here it could be reasonable to handle ASTs of the same project at the same time
-    histories = extract_histories(astFilePath)
+    histories, a, b, c, d = extract_histories(astFilePath, testFilePath)
 
     # Like requested, write output to stdout
     print(histories)
