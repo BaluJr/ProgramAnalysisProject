@@ -24,9 +24,9 @@ class HistoryCollection(object):
 
     def __init__(self):
         ''' Creates a new initial historyCollection '''
-          # List of encapsulated HistoryCollections. The order of the list corresponds to the order of events in time. 
-        # Each element can be an event tuple (objectname, eventname, position, context)) or a List of inner HistoryCollections.
-        # All HistoryCollections within one List represent parallel execution traces. They emerge during conditonal clauses.
+        # List of encapsulated HistoryCollections. The order of the list corresponds to the order of events in time. 
+        # Each element can be an atomic event tuple (objectname, eventname, position, context)) or a List of inner HistoryCollections.
+        # All HistoryCollections within one inner List represent parallel execution traces. They emerge during conditonal clauses.
         self.histories = []
 
         # This flag holds whether this history is the body of a loop. If so, the loop depth of all contained history 
@@ -51,40 +51,41 @@ class HistoryCollection(object):
         the complete history is built recursively.
 
         Input: 
-            obj:                The abstract object to whose abstract history the event is attached to
-            methodSignature:    The name of the function called, which is added to the histories of the pts targets
-                                In our solution. Is also allowed to be a property acces. In this case name missleading.
-        position:               The position at which the pts appeared
-        context:                The functionContext in which the event appeared. This is necessary to stop adding 
+            obj:                The abstract object to whose abstract history the event belongs to. It is really the 
+                                abstract object and will be later during history processing assigned to all the 
+                                corresponding concrete objects.
+            methodSignature:    The name of the function called, which is added to the histories of the abstract object.
+                                Is also allowed to be a property acces. (Yes... it shouldn't be called methond then! ;) )
+            position:           The position at which the operation appeared
+            context:            The functionContext in which the event appeared. This is necessary to stop adding 
                                 to histories, that include already a return statement within the context of this function. 
         '''
         self.histories.append((obj,methodSignature, position, contextFunction))
 
 
+
     def addHistoryCollection (self, historyCollection):
         """ Adds another historyCollection to the histories of the calling one.
-        If there are multiple histories for the same object do the 
-        union, what means doing the crossproduct between the histories.
-        Take care that deep copyies.
+        This is done by storing this history collection in the list of the parent historyCollection.
         The deep encapsulation is necessary since each historyCollection might contain
         additional information.
 
         Input: 
         historyCollection:  The other HistoryCollection, whose traces shall be 
-                            appended to the own ones.
+                            appended to this one.
         """
         if not historyCollection.isEmpty():
            self.histories.append([historyCollection])
 
 
     def addHistoriesConditional (self, historyCollections):
-        """ Appends another historyCollection to the calling one in context of a case.
-        This functions takes into account that all alternative historyCollections 
-        have to be regarded and kept as one possible track.
+        """ Appends other historyCollections to the calling one, looking onto it as 
+        a case. That means the histories are appended as parallel histories, to handle 
+        later on the correct history reconstruction.
 
         Input: 
-        historyCollection:  List of HistoryCollection, whose traces shall be 
-                            appended to the own ones.
+            historyCollections:     List of HistoryCollection, whose traces shall be 
+                                    appended to the own ones.
         """
         emptyHistFound = False
         filteredCollection = []
@@ -95,7 +96,6 @@ class HistoryCollection(object):
                 emptyHistFound = True
         if emptyHistFound:
             filteredCollection.append(HistoryCollection())
-
         if len(filteredCollection) >= 2:
             self.histories.append(filteredCollection)
 
@@ -113,7 +113,8 @@ class HistoryCollection(object):
     def markAsLoopBody(self):
         ''' Marks this history as a loopBody. 
         This causes all contained events to have a by one 
-        increased by loopingDepth property. 
+        increased loopingDepth property later during history 
+        construction.
         '''
         self.loopBody = True
 
@@ -122,11 +123,15 @@ class HistoryCollection(object):
 
     def toOutputFormat(self, objectCollection):
         """ Do the postprocessing for created history
+        So out of the recursive temporal datastructure, creates the 
+        final output format with concrete histories per object.
+        For this all the things like crossproduct for all conditional 
+        parallel execution pathes are taken into account.
         Remove empty results and anonymous objecs, that were not used.
 
         Input:
             state:  The state that was built together with the history.
-                    Used to resolve the abstract objects.
+                    Used to resolve the abstract objects into the concrete ones.
         """
         history = self._toOutputFormatInner(objectCollection, 0)
 
@@ -242,5 +247,7 @@ class HistoryCollection(object):
         return result
 
 
+
     def isEmpty(self):
+        ''' Returns whether this historyCollection does not contain events '''
         return len(self.histories) == 0

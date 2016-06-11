@@ -1,13 +1,16 @@
 import sys
 
+# Define globally where to look for data
 pathToFullData = "/home/pa/SharedData/FullData"
 switch = "training"
+
 
 if __name__ == "__main__":
     '''
     This class is an additional script, that devides the huge file with all the ASTs into
     multiple files, one per folder. To do this, it takes the information out of the
     programs_ast.txt
+    It is kind of a preprocessing.
     '''
 
     # Create a dictionary of which lines belong to which object
@@ -16,7 +19,6 @@ if __name__ == "__main__":
     projectDict = {}
     i = 0
     offset = 0
-
     for line in fullPathFile:
         projectName = line[5:line.find("/", 6)]
         if not projectName in projectDict:
@@ -44,8 +46,7 @@ if __name__ == "__main__":
         pathFile.close()
         astFile.close()
         i += 1
-        if i == 1000:
+        if i % 1000 == 0:
             print(i)
-            i = 0
 
     print("Success")

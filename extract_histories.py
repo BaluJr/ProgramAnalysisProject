@@ -7,10 +7,13 @@ import CustomExceptions
 from HistoryCollection import HistoryCollection
 
 
-
+# Global flags for debugging purposes
+# Process the code in /tests_hisotires/TestingCode.js
 UseTestingCodejs = False
-WriteCreatedJs = True
+# Write the created js per project into the data folder
+WriteCreatedJs = True 
 
+# The new JS Standard
 es6_standard = ["ForOfStatment", "ArrowFunctionExpression", "YieldExpression", "TemplateLiteral", "TaggedTemplateExpression"
 "TemplateElement", "ObjectPattern", "ArrayPattern", "RestElement", "AssignmentPattern", "ClassBody",
 "MethodDefinition", "ClassDeclaration", "ClassExpression", "Modules", "ModuleDeclaration", "ModuleSpecifier",
@@ -23,6 +26,7 @@ class history_extractor:
     def __init__(self, asts, callgraphs, astsFilePathDebug):
         ''' Constructor immediatly sets ast and callgraph this extractor shall work on. 
         '''
+
         self.NameDebug = astsFilePathDebug
         self.asts = asts
         self.callgraphs = callgraphs
@@ -41,12 +45,12 @@ class history_extractor:
         # An additional place for storing for which object there exists an hole
         self.holeObjects = {}
 
-    def generateHistories(self):
-        ''' Creates the history for the ast and callgraph given during initialization
-        No input and no return.
-        '''
 
-        # Then write the histories of the real walk throughs
+
+    def generateHistories(self):
+        ''' Creates the history for the ast and callgraph given during initialization. '''
+
+        # First go through the code like a real execution
         for astNumber in range(len(self.asts)):
             state = State()
             self.histories.append(self._analyseStatement(astNumber, 0, state))
@@ -54,13 +58,14 @@ class history_extractor:
             outputForAST = self.histories[-1].toOutputFormat(state)
             self.outputHistories.update(outputForAST)
 
-
-        # Merge in the histories for isolated single functions. They are built when found in code
-        # By keeping the longest history, the most favorable execution path is learned
+        # Then also process each function on its own. This is necessary since most functions
+        # won't be executed. Merge these histories into the execution histories.
+        # By keeping the longest history, the most favorable execution path is learned.
         for functionHistory in self.isolatedFunctionHistories:
             functionHistory.update(self.outputHistories)
             self.outputHistories = functionHistory
 
+        # Finally also remember which global objects were used and are offered
         self.globallyOfferedClasses = set(
             [classname for classname in state.globalEnvironment
              if classname[0].isupper() and state.globalEnvironment[classname] != None]
@@ -70,29 +75,34 @@ class history_extractor:
                 if classname[0].isupper():
                     self.globallyOfferedClasses.add(classname)
 
-        # Don't know whether better name them variable or class
         self.globallyUnknownVariables = set(
             [variable for variable in state.globalEnvironment
              if variable[0].isupper() and state.globalEnvironment[variable] == None])
-        i=1
+       
+
 
     def getHistoryString(self, astObjects = None, hole = False):
-        ''' Returns the created history
-        Depending on whether specific nodes are given as parameter or not 
-        it gives a list of those histories or a list of otherwise a list
-        off all histories for all regarded classes.
+        ''' Returns the created history.
+        This file creates the output string for the histories.
+        There are in facts three different modes how to do this.
+        A) When hole=true:      Only the histories for elements with a hole in 
+                                it are returned
+        B) astObjects != None:  Only the histories for the provided testcases are 
+                                returned.
+        C) Else:                All histories are returned with the class name
+                                in the beginning of each history.
+
 
         Input:
             astObjects:     [optional] Specific nodes for which one wants to get
                             the history. Given by AST ID and NodeID
-            cutAtHoles:     Whether only the histories until the hole shall be returned
+            hole:           Whether only the histories until the hole shall be returned
                             This is necessary for predicting suggestions.
 
         Return:
             hist:           History in the output format defined in the paper.
         '''
-
-        if hole == True:
+        if hole == True:            # A
             astObjects = set(self.holeObjects.values())
             outputString = ""
             for obj in astObjects:
@@ -103,7 +113,7 @@ class history_extractor:
                         outputString += "<" + ','.join([str(event[i]) for i in range(4)]) + "> "
                     outputString += "\n"
 
-        elif astObjects != None:
+        elif astObjects != None:    # B
             outputString = ""
             for astObject in astObjects:
                 treeId, nodeId = astObject.split("\t")
@@ -116,8 +126,7 @@ class history_extractor:
                         outputString += "<" + ','.join([str(event[i]) for i in range(4)]) + "> "
                     outputString += "\n"
 
-        else:
-            # If return histories for whole classes, cut away the object numbers
+        else:                       # C
             outputString = ""
             for obj in self.outputHistories:
                 classTag = "<" + obj.split("-")[0] + ">   "
@@ -131,6 +140,8 @@ class history_extractor:
 
 
 
+
+    # Set of functions used for getting the used variables.
     def getGloballyPrototypedClasses(self):
         return self.globallyPrototypedClasses
 
@@ -152,6 +163,8 @@ class history_extractor:
 
 
 
+    # The following functions are now for the internal parsing:
+
     def _analyseStatement(self, astNumber, nodeNumber, state):
         ''' Analyses a single statment
         Executes a statement returning its history. A return value is not provided.
@@ -168,12 +181,10 @@ class history_extractor:
         Input:
             astNumber:      The ast the statement belongs to
             nodeNumber:     The node in the AST to analyse
-            env:            EnvironmentObject containing the local and global environment with the 
-                            mapping from variables to (possibly abstract) objects
-            heap:           The ObjectCollection object. Management of the objects and their fields
+            state:          The state with the current environment, the objects and the heap.
 
         Return:
-            hist:           HistoryManager for this node
+            hist:           The HistoryCollection for this node
         '''
        
         ### Get Statement and type 
@@ -357,7 +368,8 @@ class history_extractor:
             state:          The state of the current execution (contains environment, heap, objects)
 
         Return:
-            hist:           HiS list of accessors. These two cases have to be handled separatly.
+            hist:           The HistoryCollection for this node
+            ret:            List of accessors. These two cases have to be handled separatly.
                             The parent statement/expression has to handle what to do with it. This is 
                             necessary to realize assignment statements properly.
                             For variable list has one member. For MemberExpressions two.
@@ -717,9 +729,7 @@ def prepare_files(astFilePath):
         text_file.write(genAst)
         text_file.close()
 
-
-
-
+        
     # A) Parse the AST
     astFile = open(astFilePath, "r")
     asts = []
@@ -819,8 +829,9 @@ def prepare_files(astFilePath):
 
 
 
+
 def extract_histories(astsFilePath, testsFilePath = None, testOnHoles = False):
-    """ Extracts histories available in the designated files.
+    """ THIS IS THE MAIN FUNCTION TO CALL FOR THIS CLASS
 
     Input:
         astsFilePath:       Path to file containing ASTs, one per line
@@ -833,8 +844,12 @@ def extract_histories(astsFilePath, testsFilePath = None, testOnHoles = False):
         histories:          List of history objects as a string, formatted like in the paper.
                             If tests or holes are given "<tree_id> <node_id>   <token_1> ... <token_n>"
                             Otherwise for whole classes "<class_name>   <token_1> ... <token_n>"
+        protos:             Classes whose prototype has been changed within this code
+        uses:               Classes which where used
+        offered:            Variables, that are created within this module within the global namespace a
+                            and which start with capital letter. (They should be classes though).
+        unknowns:           Global variables which were accessed but nowhere defined.
     """
-
     # Get the corresponding callgraph
     asts, callgraphs = prepare_files(astsFilePath)
 
@@ -879,8 +894,8 @@ if __name__ == "__main__":
     astFilePath = sys.argv[1]
     testFilePath = sys.argv[2]
 
-    # Here it could be reasonable to handle ASTs of the same project at the same time
-    histories, a, b, c, d = extract_histories(astFilePath, testFilePath)
-
-    # Like requested, write output to stdout
-    print(histories)
+    try:
+        histories, a, b, c, d = extract_histories(astFilePath, testFilePath, False)
+        print(histories)
+    except Exception as e:
+        eprint(str(e))
