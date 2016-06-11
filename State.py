@@ -4,26 +4,26 @@ class State(object):
     """ This class handles the mapping of the objects
     and the Heap. It is reasonable to do this within one file, since the merging always 
     concerns both parts.
-    Handling arrays should work as well since it is rather improbable that objects are assigned 
-    to an array in a loop.
     """
     
     
     def __init__(self):
-        # From OBJECTS L
+        # In paper: OBJECTS L --
         # The mappings from an object to the one level more abstract one
         self.objectToMoreAbstractObject = {}
         # Another mapping containing for each object a set of all concrete objects included in the abstraction
         self.abstractObjectToObjects = {}    # Remember for all abstr. objects the set of  atomar objects they contain
 
-        # From HEAP  
-        # Holds the most abstract objects. Mapping of object/array fields to objects. Handles the references to the other objects.
+        # In paper: HEAP -- 
+        # Holds the most abstract objects. 
+        # Mapping of object/array fields to objects. Handles the references to the other objects.
         self.heap = {"window-0:0": {}, "document-0:0": {}}
         
-        # From ENV
+        # In paper: ENV --
         # Environment is split into the local and global one
         self.localEnvironment = {"__return__": None}
         self.globalEnvironment = {"window": "window-0:0", "document": "document-0:0", "__this__": "window-0:0"}
+        
         # Two special fields necessary for administration
         self.functionName = "lambdaExpression"
         self.context = "window-0:0"
@@ -46,7 +46,7 @@ class State(object):
             astNodeId:      The class from which the object instantiated
 
         Output:
-            objName:        "objectClass_astId:astNodeId"
+            objName:        The obj name as "objectClass_astId:astNodeId"
         '''
         name =  objectClass + "-" + str(astId) + ":" + str(astNodeId)
         self.heap[name] = {}
@@ -61,13 +61,10 @@ class State(object):
         ends up finding the new abstract object for a concrete object, without having to alter the 
         existing references. Therefore the environment does not have to be altered.
         Important: The name for the merged object has to be deterministically created sothat 
-        they are always in order. Otherwise the merging of multiple states will fail!
+        they are always in order. Otherwise the merging of multiple states would fail!
 
         Input:
-            objs:   List of objects to merge
-
-        Output:
-            mergedObject: The object that was merged as result
+            objs:   List of abstract (or concrete) objects to merge
         """
 
         objs = [obj for obj in objs if obj != None]
@@ -100,7 +97,7 @@ class State(object):
                 else:
                     fieldValues[field].add(self.heap_get(obj,field))
 
-        # When again overlapping objects another merge necessary
+        # When now new overlapping objects, another merge necessary
         sets = list(fieldValues.values())
         sets.sort(key=len, reverse=True)
         for setOfItemsToMerge in sets:
@@ -111,27 +108,23 @@ class State(object):
 
 
 
-
-
-
     def getAbstractObject(self, obj):
-        """ Returns the name of the most abstract object, the given object has been merged into.
+        """ Returns the name of the most abstract object, into which the given object has been merged.
         This works as a recursive search. For each concrete and abstract object the id of the 
-        next abstract object is stored, into which it has been merged. 
+        next more abstract object is stored, into which it has been merged. 
 
         Input: 
-            obj:    The object for which we want to get the most abstract 
+            obj:    The object for which we want to get the most abstract one
         """
         if obj == None:
             return None
-
         while (obj in self.objectToMoreAbstractObject):
             obj = self.objectToMoreAbstractObject[obj]
         return obj
 
     
     def getConcreteObjects(self, obj):
-        """ Returns the list ob concrete objects, abstracted by the 
+        """ Returns the list ob concrete objects, contained within the 
         given abstract object 
         
         Input:
@@ -144,36 +137,11 @@ class State(object):
         if obj in self.abstractObjectToObjects:
             return self.abstractObjectToObjects[obj]
         else:
-            # The object is not abstract
+            # In case the object is not abstract
             return set([obj])
 
 
-    def getTarget(self, accessorList):
-        """ Returns the returning value for a concatenation of accessors
-        This has been introduced in the very end since was necessary for 
-        eg. assignment, that the accessor lists are returned and not the 
-        objects themselves.
-        If only one accessor, it is a variable. For two accessors, the first
-        one is the object and the second one its field. Other cases are not
-        posible since cascaded field accesses are devided into multiple
-        MemberExpressions.
-        """
 
-        # This is a preparation in case we go over to handle literals
-        if isinstance(accessorList, (int, float, bool)):
-            return None
-
-        # When already a concrete object
-        if not isinstance(accessorList, (list)):
-            return accessorList
-
-        # Return the target
-        if len(accessorList) == 1:
-            result = self.env_get(accessorList[0])
-        else:
-            result = self.heap_get(accessorList[0], accessorList[1])
-
-        return self.getAbstractObject(result)
 
 
     ########################################################################
@@ -217,6 +185,7 @@ class State(object):
 
 
 
+
     
     ########################################################################
     # From ENVIRONMENT
@@ -230,7 +199,7 @@ class State(object):
             var:    The variable to look for
 
         Return:
-            pts:    The abstract object, the variable points to
+            abtrObj:    The abstract object, the variable points to
         '''
 
         if var in self.localEnvironment:
@@ -241,6 +210,7 @@ class State(object):
             self.globalEnvironment[var] = None
             return None
 
+
         
     def env_createLocal (self, name):
         ''' Creates a variable in the local environment
@@ -249,6 +219,7 @@ class State(object):
             name:   The name of the new variable
         '''
         self.localEnvironment[name] = None
+
 
 
     def env_set (self, var, val):
@@ -280,6 +251,38 @@ class State(object):
 
     ########################################################################
     # General
+    def getTarget(self, accessorList):
+        """ Returns the returning value for a concatenation of accessors
+        This has been introduced in the very end since was necessary for 
+        eg. assignment, that the accessor lists are returned and not the 
+        objects themselves.
+        If only one accessor, it is a variable. For two accessors, the first
+        one is the object and the second one its field. Other cases are not
+        posible since cascaded field accesses are devided into multiple
+        MemberExpressions.
+
+        Input: 
+            accessorList:   List of one or two accessors
+        """
+
+        # This is a preparation in case we go over to handle literals
+        if isinstance(accessorList, (int, float, bool)):
+            return None
+
+        # When already a concrete object
+        if not isinstance(accessorList, (list)):
+            return accessorList
+
+        # Return the target
+        if len(accessorList) == 1:
+            result = self.env_get(accessorList[0])
+        else:
+            result = self.heap_get(accessorList[0], accessorList[1])
+
+        return self.getAbstractObject(result)
+
+
+
     def prepareForSubfunction(self, functionContext, functionName):
         ''' Returns a new state for a subfunction
         It copies the global environment to the new state 
@@ -306,6 +309,7 @@ class State(object):
         return subfunctionState
 
 
+
     def copy(self):
         ''' Returns a copied state
         It deep copies all components of the original history to the new one to
@@ -327,8 +331,9 @@ class State(object):
         return copiedState
 
 
+
     def mergeIn(self, newStates):
-        ''' Merges the given states into the state.
+        ''' Merges the given states into this state.
         Merges in the states by taking care to merge the declared 
         variables and heap declarations. If necessary merges objects.
         

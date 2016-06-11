@@ -1,12 +1,7 @@
+# This class only contains some easy exceptions used within the project
+
 class CallgraphException(Exception):
     pass
 
 class MappingException(Exception):
     pass
-
-class HoleFoundException(Exception):
-    def __init__(self, history):
-        self.history = history
-
-    def __str__(self):
-        self.history
