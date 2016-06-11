@@ -7,7 +7,7 @@ xmlhttp.onreadystatechange = (function()  {
    }
 }
 );
-xmlhttp._questionmark_();
+xmlhttp._HOLE_();
 
 
 
@@ -21,7 +21,7 @@ xmlhttp.onreadystatechange = (function()  {
 }
 );
 xmlhttp.open("GET", url, true);
-xmlhttp._questionmark_();
+xmlhttp._HOLE_();
 
 
 
@@ -38,7 +38,7 @@ xmlhttp._questionmark_();
          return false;
       }
       httpRequest.onreadystatechange = alertContents;
-      httpRequest._questionmark_();
+      httpRequest._HOLE_();
    }
 ;
 }
@@ -60,7 +60,7 @@ xmlhttp._questionmark_();
       }
       httpRequest.onreadystatechange = alertContents;
       httpRequest.open("GET", url);
-      httpRequest._questionmark_();
+      httpRequest._HOLE_();
    }
 ;
 }

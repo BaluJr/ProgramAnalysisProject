@@ -96,9 +96,11 @@ class history_extractor:
             astObjects = set(self.holeObjects.values())
             outputString = ""
             for obj in astObjects:
+                treeId, nodeId, obj = obj
+                outputString += "<" + str(treeId) + "><" + str(nodeId) + ">   "
                 for concreteTrace in self.outputHistories[obj]:
                     for event in concreteTrace:
-                        outputString += "<" + ','.join([str(event[i]) for i in range(4)]) + ">"
+                        outputString += "<" + ','.join([str(event[i]) for i in range(4)]) + "> "
                     outputString += "\n"
 
         elif astObjects != None:
@@ -107,25 +109,22 @@ class history_extractor:
                 treeId, nodeId = astObject.split("\t")
                 obj = self.nodeToObject[int(treeId)][int(nodeId)]
 
-                startTag = "<" + treeId + "><" + nodeId + ">"
+                startTag = "<" + treeId + "><" + nodeId + ">   "
                 for concreteTrace in self.outputHistories[obj]:
                     outputString += startTag
                     for event in concreteTrace:
-                        outputString += "<" + ','.join([str(event[i]) for i in range(4)]) + ">"
+                        outputString += "<" + ','.join([str(event[i]) for i in range(4)]) + "> "
                     outputString += "\n"
 
         else:
             # If return histories for whole classes, cut away the object numbers
             outputString = ""
             for obj in self.outputHistories:
-                #if obj.startswith("anonymous"):
-                #    continue
-
-                classTag = "<" + obj.split("-")[0] + ">"
+                classTag = "<" + obj.split("-")[0] + ">   "
                 for concreteTrace in self.outputHistories[obj]:
                     outputString += classTag
                     for event in concreteTrace:
-                        outputString += "<" + ','.join([str(event[i]) for i in range(4)])  + ">"
+                        outputString += "<" + ','.join([str(event[i]) for i in range(4)])  + "> "
                     outputString += "\n"
 
         return outputString
@@ -373,8 +372,8 @@ class history_extractor:
         ### Identifier handled together with expression
         if t in ["Identifier", "Property"]:
             # Special case for holes
-            if curNode["value"] == "_questionmark_":
-                return HistoryCollection(), ["_questionmark_"]
+            if curNode["value"] == "_HOLE_":
+                return HistoryCollection(), ["_HOLE_"]
 
             # For realizing the histories for specific nodes: Store to which object this node belongs to
             object = state.env_get(curNode["value"])
@@ -494,8 +493,8 @@ class history_extractor:
             rightHist, rightRet = self._analyseExpression(astNumber, curNode["children"][1], state)
             rightRet = rightRet[0] # we use value
 
-            if rightRet == "_questionmark_":
-                self.holeObjects[astNumber] = leftRetTarget
+            if rightRet == "_HOLE_":
+                self.holeObjects[astNumber] = (astNumber, curNode["children"][1], leftRetTarget)
 
             hist.addHistoryCollection(rightHist)
             if leftRetTarget != None:
@@ -614,6 +613,9 @@ class history_extractor:
                         hist.addEventToHistory(tmpRet, ast[curNode["children"][0]]["value"], i+1, state.functionName)
 
             elif  (ast[curNode["children"][0]]["type"] == "CallExpression"):
+                return HistoryCollection(), None    #TODO
+
+            elif  (ast[curNode["children"][0]]["type"] == "ArrayAccess"):
                 return HistoryCollection(), None    #TODO
 
             else:
@@ -821,16 +823,16 @@ def extract_histories(astsFilePath, testsFilePath = None, testOnHoles = False):
     """ Extracts histories available in the designated files.
 
     Input:
-    astsFilePath:       Path to file containing ASTs, one per line
-    testsFilePath:      If the histories shall be reduced. Otherwise histories for all the
-                        classes are given.
-    cutAtHoles:         Whether only the histories until the hole shall be returned
-                        This is necessary for predicting suggestions.
+        astsFilePath:       Path to file containing ASTs, one per line
+        testsFilePath:      If the histories shall be reduced. Otherwise histories for all the
+                            classes are given.
+        testOnHoles:        Whether only the histories with a _HOLE_ element in them exist
+                            This is necessary for predicting suggestions.
 
     Output:
-    histories:      List of history objects as a string, formatted like in the paper.
-                    If tests is given "<tree_id> <node_id> <token_1> ... <token_n>"
-                    Otherwise for classes "<class_name> <node_id> <token_1> ... <token_n>"
+        histories:          List of history objects as a string, formatted like in the paper.
+                            If tests or holes are given "<tree_id> <node_id>   <token_1> ... <token_n>"
+                            Otherwise for whole classes "<class_name>   <token_1> ... <token_n>"
     """
 
     # Get the corresponding callgraph
@@ -854,15 +856,6 @@ def extract_histories(astsFilePath, testsFilePath = None, testOnHoles = False):
     historiesString = hist_extractor.getHistoryString(tests, testOnHoles)
     return historiesString, protos, uses, offered, unknowns
 
-
-    # Get the histories (format depends, on wheter testsFilePath given or not)
-    tests = None
-    if testsFilePath != None:
-        tests = open(testFilePath, "r").read().split("\n")
-    historiesString = hist_extractor.getHistoryString(tests, cutAtHoles)
-    return historiesString, protos, uses, offered, unknowns
-
-    return historiesString
 
 
 

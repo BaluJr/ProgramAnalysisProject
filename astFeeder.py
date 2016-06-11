@@ -8,22 +8,33 @@ import CustomExceptions
 from multiprocessing import Pool, Process, Queue
 
 
-switch = "eval"
+switch = "training"
 pathToData = "/home/pa/SharedData/FullData/" + switch + "/"
-OverallAmountOfFiles = 10000
 
+OverallAmountOfFiles = 10000
+globCounter = 0
+sizeInputqueue = 0
 
 def feed(queue, jsonFiles):
+    global sizeInputqueue
     for file in jsonFiles:
-        queue.put(file)
-
+        if sizeInputqueue > 1000:
+            time.sleep(5)
+        try:
+            queue.put(file)
+            sizeInputqueue += 1
+        except e as Exception:
+            time.sleep(5)
+            continue
 
 def extract(queueIn, queueOut):
-    while True:
+    global sizeInputqueue
+    while globCounter < OverallAmountOfFiles:
         try:
             fileName = queueIn.get(block=False)
         except:
-            break
+            time.sleep(5)
+            continue
 
         print("Extracting " + fileName)
         result = (None, None, None)  # 0: Filename; 1: "hist, err ; 2: result
@@ -41,27 +52,30 @@ def extract(queueIn, queueOut):
         except Exception as e:
             print("History error in " + fileName)
             result = (fileName, "err", "Histories")
+        sizeInputqueue -= 1
         queueOut.put(result)
+    print("DIED!!!!!!!")
+
 
 
 def store(queue, test):
     '''
     This last step is taking care of the string
     '''
+    global globCounter
 
     # Prepare the targets
     projectsStatusFile = open("ProjectsStatus.txt", "w+")
     completeHistoryFile = open("Histories.hist", "w+")
-    i = 0
     time.sleep(10)
-    while i < OverallAmountOfFiles:
+    while globCounter < OverallAmountOfFiles:
         try:
             fileName, type, histAndVars = queue.get(block=False)
         except:
             time.sleep(10)
             continue
 
-        print("Storing " + fileName)
+        print("Storing "+ str(globCounter) + " :  " + fileName)
 
         # When successfull
         if type == "hist":
@@ -85,10 +99,12 @@ def store(queue, test):
         # Else only write status message
         else:
             projectsStatusFile.write(histAndVars + ": " + fileName + "\n")
-        i += 1
+        globCounter += 1
 
     projectsStatusFile.close()
     completeHistoryFile.close()
+
+
 
 
 if __name__ == "__main__":
@@ -97,33 +113,35 @@ if __name__ == "__main__":
     is passed to history_extrator.
     '''
 
+
     # Create list of the interesting files
     jsonFiles = []
-    prefixList = ["d", "e", "f", "g", "h", "i", "j", "k", "l"]
+    prefixList = ["a","b","c"] #["d", "e", "f", "g", "h", "i", "j", "k", "l"]
     for fileName in os.listdir(pathToData):
-        if fileName.endswith(".json") and fileName[0] in prefixList: #fileName.startswith("dachcom-digital"):
+        if fileName.endswith(".json"): # and fileName[0] in prefixList: #fileName.startswith("dachcom-digital"):
             jsonFiles.append(fileName)
     OverallAmountOfFiles = len(jsonFiles)
+    global globCounter
+    globCounter = 0
 
     # Handle all the files
     nthreads = multiprocessing.cpu_count()
-    workerQueue = Queue()
+    workerQueue = Queue(maxsize=10000)
     writerQueue = Queue()
     feedProc = Process(target=feed, args=(workerQueue, jsonFiles))
-    calcProc = [Process(target=extract, args=(workerQueue, writerQueue)) for i in range(1)]
+    # Keep one free thread for writing.
+    calcProc = [Process(target=extract, args=(workerQueue, writerQueue)) for i in range(nthreads-1)]
     writProc = Process(target=store, args=(writerQueue, "test"))
 
     start = time.time()
-    # Fill the pipeline first
-    feedProc.start()
-    feedProc.join()
-
     # Start the pipeline
+    feedProc.start()
     for p in calcProc:
         p.start()
     writProc.start()
 
     # Make sure that everything ran through
+    feedProc.join()
     for p in calcProc:
         p.join()
     writProc.join()

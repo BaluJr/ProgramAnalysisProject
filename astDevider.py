@@ -1,7 +1,7 @@
 import sys
 
 pathToFullData = "/home/pa/SharedData/FullData"
-switch = "eval"
+switch = "training"
 
 if __name__ == "__main__":
     '''
