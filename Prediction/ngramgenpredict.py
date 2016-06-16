@@ -36,8 +36,8 @@ if __name__ == "__main__":
         # Get the histories and cut away everything after the _HOLE_
         histories = extract_histories(astFilePath, testFilePath, testOnHoles = True);
         histories = histories[0].split("\n") #Remember also environment infos given from 1 to 4
-        for history in histories:
-            history[:history.rfind(">", 0, history.find("_HOLE_")) + 1]
+        for i, history in enumerate(histories):
+            histories[i] = history[:history.rfind(">", 0, history.find("_HOLE_")) + 1]
 
         t0 = time.time()
         f = open(astFilePath)

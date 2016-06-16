@@ -112,7 +112,7 @@ class history_extractor:
             outputString = ""
             for obj in astObjects:
                 treeId, nodeId, obj = obj
-                outputString += "<" + str(treeId) + "><" + str(nodeId) + ">   "
+                outputString += "<" + str(treeId) + "> <" + str(nodeId) + "> "
                 for concreteTrace in self.outputHistories[obj]:
                     for event in concreteTrace:
                         outputString += "<" + ','.join([str(event[i]) for i in range(4)]) + "> "
