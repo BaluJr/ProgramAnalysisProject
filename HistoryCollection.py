@@ -1,5 +1,10 @@
 import copy
 
+
+# This flag is a security against huge amounts of parralel histories for
+# a single obect, caused by many if conditions
+HistoryUpperLimit = 5
+
 #from enum import Enum
 #class SpecialTags(Enum):
 #    ic = 1 # If Condition
@@ -209,6 +214,9 @@ class HistoryCollection(object):
                         if existingObj in innerResult:
                             if existingObj in result:
                                 for concreteHistory in innerResult[existingObj]:
+                                    # Security for complexity explosion
+                                    if  len(result[existingObj]) > HistoryUpperLimit:
+                                        continue;
                                     for concretePreviousHistory in result[existingObj]:
                                         h =  copy.deepcopy(concretePreviousHistory)
                                         h.extend(concreteHistory)
@@ -239,7 +247,7 @@ class HistoryCollection(object):
                         for history in result[obj]:
                             # Take care that events are not added, when in the specific
                             # history already a ret appeared for that function
-                            if not (history[-1][2] == "ret" and history[-1][1] == contextFn):
+                            if len(history) == 0 or not (history[-1][1] == "ret" and history[-1][0] == contextFn):
                                 history.append((functioname,pos, loopdepth, self.specialTag))
                     else:
                         result[obj] = [[(functioname, pos, loopdepth, self.specialTag)]]

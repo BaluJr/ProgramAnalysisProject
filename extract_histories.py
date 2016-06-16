@@ -8,10 +8,10 @@ from HistoryCollection import HistoryCollection
 
 
 # Global flags for debugging purposes
-# Process the code in /tests_hisotires/TestingCode.js
+# Process the code in /tests_histoires/TestingCode.js instead of the given AST. For debugging.
 UseTestingCodejs = False
 # Write the created js per project into the data folder
-WriteCreatedJs = True 
+WriteCreatedJs = True
 
 # The new JS Standard
 es6_standard = ["ForOfStatment", "ArrowFunctionExpression", "YieldExpression", "TemplateLiteral", "TaggedTemplateExpression"
@@ -19,6 +19,10 @@ es6_standard = ["ForOfStatment", "ArrowFunctionExpression", "YieldExpression", "
 "MethodDefinition", "ClassDeclaration", "ClassExpression", "Modules", "ModuleDeclaration", "ModuleSpecifier",
 "ImportDeclaration", "ImportSpecifier", "ImportBatchSpecifier", "ExportDeclaration", "ExportBatchSpecifier",
 "ExportSpecifier"]
+
+
+# Flag to limit recursion
+RecursionLimit = 5
 
 
 class history_extractor:
@@ -53,7 +57,7 @@ class history_extractor:
         # First go through the code like a real execution
         for astNumber in range(len(self.asts)):
             state = State()
-            self.histories.append(self._analyseStatement(astNumber, 0, state))
+            self.histories.append(self._analyseStatement(astNumber, 0, state, 0))
 
             outputForAST = self.histories[-1].toOutputFormat(state)
             self.outputHistories.update(outputForAST)
@@ -165,7 +169,7 @@ class history_extractor:
 
     # The following functions are now for the internal parsing:
 
-    def _analyseStatement(self, astNumber, nodeNumber, state):
+    def _analyseStatement(self, astNumber, nodeNumber, state, recursionDepth):
         ''' Analyses a single statment
         Executes a statement returning its history. A return value is not provided.
         Handling "return" is done by observing the special return-Element in the
@@ -194,7 +198,7 @@ class history_extractor:
             
         ### Analyse the Statements based on type
         if t == "ExpressionStatement":
-            tmpHis, ret = self._analyseExpression(astNumber, curNode["children"][0], state)
+            tmpHis, ret = self._analyseExpression(astNumber, curNode["children"][0], state, recursionDepth)
             return tmpHis
 
 
@@ -202,7 +206,7 @@ class history_extractor:
             hist = HistoryCollection()
             if "children" in curNode:
                 for i in curNode["children"]:
-                    tmpHist = self._analyseStatement(astNumber, i, state)
+                    tmpHist = self._analyseStatement(astNumber, i, state, recursionDepth)
                     hist.addHistoryCollection(tmpHist)
             return hist
 
@@ -218,7 +222,7 @@ class history_extractor:
                 return HistoryCollection()
 
             # Extend the the "__return__" variable and add the "return" statement to the history.
-            hist, ret = self._analyseExpression(astNumber, curNode["children"][0],state)
+            hist, ret = self._analyseExpression(astNumber, curNode["children"][0],state, recursionDepth)
             if ret:
                 returnObject = state.getTarget(ret)
                 state.env_set("__return__", returnObject)# Merging is done automatically
@@ -228,14 +232,14 @@ class history_extractor:
 
         # Choice
         elif t == "IfStatement":
-            hist, ret = self._analyseExpression(astNumber, curNode["children"][0], state)
+            hist, ret = self._analyseExpression(astNumber, curNode["children"][0], state, recursionDepth)
             hist.tagAsSpecialNode("ic")
             thenState = state.copy()
-            hist_then = self._analyseStatement(astNumber, curNode["children"][1], thenState)
+            hist_then = self._analyseStatement(astNumber, curNode["children"][1], thenState, recursionDepth)
             # Check whether else is given
             if len(curNode["children"]) == 3:
                 elseState = state.copy()
-                hist_else = self._analyseStatement(astNumber, curNode["children"][2], elseState)
+                hist_else = self._analyseStatement(astNumber, curNode["children"][2], elseState, recursionDepth)
                 state.mergeIn([thenState,elseState])
                 hist.addHistoriesConditional([hist_then,hist_else])
             else:
@@ -244,7 +248,7 @@ class history_extractor:
             return hist
 
         elif t == "SwitchStatement":
-            hist, ret = self._analyseExpression(astNumber, curNode["children"][0], state)
+            hist, ret = self._analyseExpression(astNumber, curNode["children"][0], state, recursionDepth)
             hist.tagAsSpecialNode("sc")
             condHistories = []
             condStates = []
@@ -255,20 +259,20 @@ class history_extractor:
                 innerHist = HistoryCollection()
                 # Handle previous case conditions
                 for precCaseCond in preceedingCaseConditions:
-                    tmpHist, ret = self._analyseExpression(astNumber, precCaseCond, condStates[-1])
+                    tmpHist, ret = self._analyseExpression(astNumber, precCaseCond, condStates[-1], recursionDepth)
                     innerHist.addHistoryCollection(tmpHist)
                 # Handle current case
                 isDefault = len(case["children"]) == 1
                 if not isDefault:
                     preceedingCaseConditions.append(case["children"][0]);
-                    tmpHist, ret = self._analyseExpression(astNumber, case["children"][0], condStates[-1])
+                    tmpHist, ret = self._analyseExpression(astNumber, case["children"][0], condStates[-1], recursionDepth)
                     tmpHist.tagAsSpecialNode("cc")
                     innerHist.addHistoryCollection(tmpHist)
-                    tmpHist = self._analyseStatement(astNumber, case["children"][1], condStates[-1])
+                    tmpHist = self._analyseStatement(astNumber, case["children"][1], condStates[-1], recursionDepth)
                     innerHist.addHistoryCollection(tmpHist)
                 else:
                     # For default the statement is only child
-                    tmpHist = self._analyseStatement(case["children"][0], condStates[-1])
+                    tmpHist = self._analyseStatement(case["children"][0], condStates[-1], recursionDepth)
                     innerHist.addHistoriesConditional(tmpHist)
                 condHistories.append(innerHist)
             hist.addHistoriesConditional(condHistories)
@@ -281,43 +285,43 @@ class history_extractor:
             return HistoryCollection()
 
         elif t == "TryStatement":
-            blockHist = self._analyseStatement(astNumber, curNode["children"][0], state)
+            blockHist = self._analyseStatement(astNumber, curNode["children"][0], state, recursionDepth)
             if len(curNode["children"]) == 3:
-                finallyHist = self._analyseStatement(astNumber, curNode["children"][0], state)
+                finallyHist = self._analyseStatement(astNumber, curNode["children"][0], state, recursionDepth)
                 blockHist.addHistoryCollection(finallyHist)
             return blockHist
 
         # Loops
         elif t in ["WhileStatement", "DoWhileStatement"]:
-            hist, ret = self._analyseExpression(astNumber, curNode["children"][0], state)
+            hist, ret = self._analyseExpression(astNumber, curNode["children"][0], state, recursionDepth)
             hist.tagAsSpecialNode("wc")
-            tmpHist = self._analyseStatement(astNumber, curNode["children"][1], state)
+            tmpHist = self._analyseStatement(astNumber, curNode["children"][1], state, recursionDepth)
             tmpHist.markAsLoopBody()
             hist.addHistoryCollection(tmpHist)
             return hist
         elif t == "ForStatement": # YEAH! The scope is acutally the same as everywhere!
-            hist, ret = self._analyseExpression(astNumber, curNode["children"][0], state)
-            tmpHist, ret = self._analyseExpression(astNumber, curNode["children"][1], state)
+            hist, ret = self._analyseExpression(astNumber, curNode["children"][0], state, recursionDepth)
+            tmpHist, ret = self._analyseExpression(astNumber, curNode["children"][1], state, recursionDepth)
             hist.addHistoryCollection(tmpHist)
-            tmpHist, ret = self._analyseExpression(astNumber, curNode["children"][2], state)
+            tmpHist, ret = self._analyseExpression(astNumber, curNode["children"][2], state, recursionDepth)
             hist.addHistoryCollection(tmpHist)
             hist.tagAsSpecialNode("fh")
-            tmpHist = self._analyseStatement(astNumber, curNode["children"][3], state)
+            tmpHist = self._analyseStatement(astNumber, curNode["children"][3], state, recursionDepth)
             tmpHist.markAsLoopBody()
             hist.addHistoryCollection(tmpHist)
             return hist
 
         elif t == "ForInStatement": 
             # The scope is the same for the iterator name!
-            hist, ret = self._analyseExpression(astNumber, curNode["children"][0], state)
+            hist, ret = self._analyseExpression(astNumber, curNode["children"][0], state, recursionDepth)
             hist.tagAsSpecialNode("fh")
             
             # Since we do not handle loops, immediatly assign all elements within the returned enumerable (Whether array or object does not matter because both in heap)
             # TODO: the for in for an array only gives the indices!!!! NO IDEA HOW TO HANDLE -> maybe a special case
-            tmpHist, ret =self._analyseExpression(astNumber, curNode["children"][1], state)
+            tmpHist, ret =self._analyseExpression(astNumber, curNode["children"][1], state, recursionDepth)
             tmpHist.tagAsSpecialNode("fh")
             hist.addHistoryCollection(tmpHist)
-            tmpHist = self._analyseStatement(astNumber, curNode["children"][2], state)
+            tmpHist = self._analyseStatement(astNumber, curNode["children"][2], state, recursionDepth)
             tmpHist.markAsLoopBody()
             hist.addHistoryCollection(tmpHist)
             return hist
@@ -329,7 +333,7 @@ class history_extractor:
                 # Create the local variable
                 state.env_createLocal(declarator["value"])
                 if "children" in declarator:
-                    hist, ret = self._analyseExpression(astNumber, declarator["children"][0], state)
+                    hist, ret = self._analyseExpression(astNumber, declarator["children"][0], state, recursionDepth)
                     state.env_set(declarator["value"], state.getTarget(ret))
                     return hist
                 else:
@@ -341,7 +345,8 @@ class history_extractor:
             for i, param in enumerate(curNode["children"][1:-1]):
                 parameterName = ast[curNode["children"][i+1]]["value"]
                 isolatedFunctionState.env_createLocal(parameterName)
-            fnHist = self._analyseStatement(astNumber, curNode["children"][-1], isolatedFunctionState)
+                isolatedFunctionState.env_set(parameterName, isolatedFunctionState.newObject("anonymous", astNumber, nodeNumber))
+            fnHist = self._analyseStatement(astNumber, curNode["children"][-1], isolatedFunctionState, recursionDepth)
             self.isolatedFunctionHistories.append(fnHist.toOutputFormat(isolatedFunctionState))
 
             # For the run through history, there is no effect
@@ -356,7 +361,7 @@ class history_extractor:
 
 
                                
-    def _analyseExpression(self, astNumber, nodeNumber, state):
+    def _analyseExpression(self, astNumber, nodeNumber, state, recursionDepth):
         ''' Analyses a single expression node. 
         In contrast to statements, expressions always have a return value.
         Expressions are the more interesting and difficult part since only 
@@ -405,8 +410,8 @@ class history_extractor:
             newObj = state.newObject("array", astNumber, nodeNumber)
             return HistoryCollection(), newObj
         elif t == "ArrayAccess":
-            hist, leftRet = self._analyseExpression(astNumber, curNode["children"][0], state)
-            rightHist, rightRet = self._analyseExpression(astNumber, curNode["children"][1], state)
+            hist, leftRet = self._analyseExpression(astNumber, curNode["children"][0], state, recursionDepth)
+            rightHist, rightRet = self._analyseExpression(astNumber, curNode["children"][1], state, recursionDepth)
             hist.addHistoryCollection(rightHist)
             return hist, [state.getTarget(leftRet), state.getTarget(rightRet)]
         elif t == "ObjectExpression":
@@ -415,7 +420,7 @@ class history_extractor:
             if "children" in curNode:
                 for child in curNode["children"]:
                     prop = ast[child]
-                    tmpHist, propertyValue = self._analyseExpression(astNumber, prop["children"][0], state)
+                    tmpHist, propertyValue = self._analyseExpression(astNumber, prop["children"][0], state, recursionDepth)
                     hist.addHistoryCollection(tmpHist)
                     state.heap_add(obj, prop["value"], state.getTarget(propertyValue))
             return hist, obj
@@ -427,7 +432,7 @@ class history_extractor:
             for i, param in enumerate(curNode["children"][:-1]): # Only parameters and last body
                 parameterName = ast[curNode["children"][i]]["value"]
                 isolatedExpressionState.env_createLocal(parameterName)
-            fnHist = self._analyseStatement(astNumber, curNode["children"][-1], isolatedExpressionState)
+            fnHist = self._analyseStatement(astNumber, curNode["children"][-1], isolatedExpressionState, recursionDepth)
             self.isolatedFunctionHistories.append(fnHist.toOutputFormat(isolatedExpressionState))
 
             # For the run through history, there is no effect
@@ -436,7 +441,7 @@ class history_extractor:
         # Unary operations
         if t == "UnaryExpression":
             # only the history is used ret should already be None since always value
-            hist, ret = self._analyseExpression(astNumber, curNode["children"][0], state)
+            hist, ret = self._analyseExpression(astNumber, curNode["children"][0], state, recursionDepth)
             return hist, None
         elif t == "UpdateExpression":
             return HistoryCollection(), None
@@ -445,16 +450,16 @@ class history_extractor:
         elif t == "BinaryExpression":
             # Return value can be ignored -> tested, that not possible to return reference in rasonable way
             # Always both parts executed. So histories can be concatenated
-            hist, ret = self._analyseExpression(astNumber, curNode["children"][0], state)
-            rightHist, ret = self._analyseExpression(astNumber, curNode["children"][1], state)
+            hist, ret = self._analyseExpression(astNumber, curNode["children"][0], state, recursionDepth)
+            rightHist, ret = self._analyseExpression(astNumber, curNode["children"][1], state, recursionDepth)
             hist.addHistoryCollection(rightHist)
             return hist, None
             
         elif t == "AssignmentExpression":
             # Execute expressions and assign right to left, AssignmentOperation missing in Parser!
             # Good news: javascript gives error when callexpression on left site of assignment
-            hist, leftRet = self._analyseExpression(astNumber, curNode["children"][0], state)
-            rightHist, rightRet = self._analyseExpression(astNumber, curNode["children"][1], state)
+            hist, leftRet = self._analyseExpression(astNumber, curNode["children"][0], state, recursionDepth)
+            rightHist, rightRet = self._analyseExpression(astNumber, curNode["children"][1], state, recursionDepth)
             rightRet = state.getTarget(rightRet) # need only target
             hist.addHistoryCollection(rightHist)
             if rightRet != None:
@@ -472,8 +477,8 @@ class history_extractor:
             return hist, rightRet
 
         elif t == "LogicalExpression":
-            hist, leftRet = self._analyseExpression(astNumber, curNode["children"][0], state)
-            rightHist, rightRet = self._analyseExpression(astNumber, curNode["children"][1], state)
+            hist, leftRet = self._analyseExpression(astNumber, curNode["children"][0], state, recursionDepth)
+            rightHist, rightRet = self._analyseExpression(astNumber, curNode["children"][1], state, recursionDepth)
             hist.addHistoryCollection(rightHist)
             # For an "or" both result values possible, for "and" only second
             if curNode["type"] == "||":
@@ -487,7 +492,7 @@ class history_extractor:
                 return hist, state.getTarget(rightRet) #If even more strage constructs -> Bad Luck
             
         elif t == "MemberExpression":
-            hist, leftRet = self._analyseExpression(astNumber, curNode["children"][0], state)
+            hist, leftRet = self._analyseExpression(astNumber, curNode["children"][0], state, recursionDepth)
             leftRetTarget = state.getTarget(leftRet) # we use target
 
             # If prototype, return yourself immediatly but additionally mark the given class variable as
@@ -500,9 +505,9 @@ class history_extractor:
                         self.globallyPrototypedClasses.add(leftRet[1])
                 else:
                     self.globallyPrototypedClasses.add(leftRet)
-                return hist, leftRetTarget
+                return hist, leftRet if isinstance(leftRet, list) else [leftRet]
 
-            rightHist, rightRet = self._analyseExpression(astNumber, curNode["children"][1], state)
+            rightHist, rightRet = self._analyseExpression(astNumber, curNode["children"][1], state, recursionDepth)
             rightRet = rightRet[0] # we use value
 
             if rightRet == "_HOLE_":
@@ -514,14 +519,14 @@ class history_extractor:
             return hist, [leftRetTarget, rightRet]
 
         elif t == "ConditionalExpression":
-            hist, ret = self._analyseExpression(astNumber, curNode["children"][0], state)
+            hist, ret = self._analyseExpression(astNumber, curNode["children"][0], state, recursionDepth)
             hist.tagAsSpecialNode("ic")
             state_then = state.copy()
-            hist_then, ret_then = self._analyseExpression(astNumber, curNode["children"][1], state_then)
+            hist_then, ret_then = self._analyseExpression(astNumber, curNode["children"][1], state_then, recursionDepth)
             # Check whether else is given
             if len(curNode["children"]) == 3:
                 state_else = state.copy()
-                hist_else, ret_else = self._analyseExpression(astNumber, curNode["children"][2], state_else)
+                hist_else, ret_else = self._analyseExpression(astNumber, curNode["children"][2], state_else, recursionDepth)
                 state.mergeIn([state_then, state_else])
                 hist.addHistoriesConditional([hist_then, hist_else])
             else:
@@ -540,9 +545,16 @@ class history_extractor:
             The special fields "state.context" and "state.functionName" are additonal information 
             stored in the environment needed for calculation!
             """   
-            
+
+            jmpAstNumber = astNumber
             if (ast[curNode["children"][0]]["type"] == "FunctionExpression"):
                 hist = HistoryCollection()
+
+                # Set the function (at the moment ignore document and window links)
+                if recursionDepth > RecursionLimit:
+                    # return at least an anonymous return object
+                    newObj = state.newObject("anonymous", astNumber, curNode["id"])
+                    return HistoryCollection(), newObj
 
                 # Set the function  (in this case always available)
                 fnNode = ast[curNode["children"][0]]
@@ -550,7 +562,7 @@ class history_extractor:
                 # Create the subfunction context   
                 subfunctionState = state.prepareForSubfunction(state.context, "anonym"+str(nodeNumber))
                 for i, param in enumerate(curNode["children"][1:]):
-                    tmpHist, tmpRet = self._analyseExpression(astNumber, param, state)
+                    tmpHist, tmpRet = self._analyseExpression(astNumber, param, state, recursionDepth)
                     hist.addHistoryCollection(tmpHist)
                     tmpRet = state.getTarget(tmpRet)
                     parameterName = ast[fnNode["children"][i]]["value"]
@@ -560,14 +572,14 @@ class history_extractor:
                         hist.addEventToHistory(tmpRet, "lamda", i, state.functionName)
 
             elif  (ast[curNode["children"][0]]["type"] == "MemberExpression"):
-                hist, ret = self._analyseExpression(astNumber, curNode["children"][0], state)
+                hist, ret = self._analyseExpression(astNumber, curNode["children"][0], state, recursionDepth)
                 functionName = ast[ast[curNode["children"][0]]["children"][1]]["value"]
 
                 # Set the function (at the moment ignore document and window links)
-                if not curNode["id"] in self.callgraphs[astNumber] or not isinstance(self.callgraphs[astNumber][curNode["id"]],int):
+                if recursionDepth > RecursionLimit or not curNode["id"] in self.callgraphs[astNumber] or not isinstance(self.callgraphs[astNumber][curNode["id"]], tuple):
                     # Add the call to the object given as a parameter
                     for i, param in enumerate(curNode["children"][1:]):
-                        tmpHist, tmpRet = self._analyseExpression(astNumber, param, state)
+                        tmpHist, tmpRet = self._analyseExpression(astNumber, param, state, recursionDepth)
                         hist.addHistoryCollection(tmpHist)
                         tmpRet = state.getTarget(tmpRet)
                         if tmpRet != None:
@@ -579,30 +591,32 @@ class history_extractor:
                     return hist, newObj
 
                 # Otherwise set the function and functioncontext
-                astId, nodeId = self.callgraphs[astNumber][curNode["id"]]
-                fnNode = self.asts[astId][nodeId]
-                subfunctionState = state.prepareForSubfunction(state.getTarget(ret[:-1]), ret[-1])
+                jmpAstNumber, nodeId = self.callgraphs[astNumber][curNode["id"]]
+                fnNode = self.asts[jmpAstNumber][nodeId]
+                subfunctionState = state.prepareForSubfunction(state.getTarget(ret[:-1]) if ret[:-1][0] != None else "anonymous", ret[-1])
                 for i, param in enumerate(curNode["children"][1:]):
-                    tmpHist, tmpRet = self._analyseExpression(astNumber, param, state)
+                    if i >= (len(fnNode["children"])-1):
+                        break #In javascript handle too many params no
+                    tmpHist, tmpRet = self._analyseExpression(astNumber, param, state, recursionDepth)
                     hist.addHistoryCollection(tmpHist)    
                     tmpRet = state.getTarget(tmpRet)
-                    parameterName = ast[fnNode["children"][i+1]]["value"]
+                    parameterName = self.asts[jmpAstNumber][fnNode["children"][i]]["value"]
                     subfunctionState.env_createLocal(parameterName)
                     subfunctionState.env_set(parameterName,tmpRet)
                     if tmpRet != None:
-                        hist.addEventToHistory(tmpRet, curNode["value"], i+1, state.functionName)
+                        hist.addEventToHistory(tmpRet, functionName, i+1, state.functionName)
 
             elif (ast[curNode["children"][0]]["type"] == "Identifier"):
                 hist = HistoryCollection()
 
                 # When no callinformation, only add event to history and create potential object
-                if not curNode["id"] in self.callgraphs[astNumber] or not isinstance(self.callgraphs[astNumber][curNode["id"]],int):
+                if recursionDepth > RecursionLimit or not curNode["id"] in self.callgraphs[astNumber] or not isinstance(self.callgraphs[astNumber][curNode["id"]],tuple):
                     newObj = state.newObject("anonymous", astNumber, curNode["id"])
                     hist.addEventToHistory(newObj,ast[curNode["children"][0]]["type"],"ret",state.functionName)
                     # Add the call to the object given as a parameter
                     functionName = ast[curNode["children"][0]]["value"]
                     for i, param in enumerate(curNode["children"][1:]):
-                        tmpHist, tmpRet = self._analyseExpression(astNumber, param, state)
+                        tmpHist, tmpRet = self._analyseExpression(astNumber, param, state, recursionDepth)
                         hist.addHistoryCollection(tmpHist)
                         tmpRet = state.getTarget(tmpRet)
                         if tmpRet != None:
@@ -610,15 +624,17 @@ class history_extractor:
                     return hist, newObj
 
                 # Otherwise set the function and functioncontext
-                astId, nodeId = self.callgraphs[astNumber][curNode["id"]]
-                fnNode = self.asts[astId][nodeId]
+                jmpAstNumber, nodeId = self.callgraphs[astNumber][curNode["id"]]
+                fnNode = self.asts[jmpAstNumber][nodeId]
 
                 subfunctionState = state.prepareForSubfunction(state.context, ast[curNode["children"][0]]["value"])
                 for i, param in enumerate(curNode["children"][1:]):
-                    tmpHist, tmpRet = self._analyseExpression(astNumber, param, state)
+                    if (i if fnNode["type"] == "FunctionExpression" else i + 1) >= (len(fnNode["children"])-1):
+                        break #In javascript handle too many params no
+                    tmpHist, tmpRet = self._analyseExpression(astNumber, param, state, recursionDepth)
                     hist.addHistoryCollection(tmpHist)
                     tmpRet = state.getTarget(tmpRet)
-                    parameterName = ast[fnNode["children"][i+1]]["value"]
+                    parameterName = self.asts[jmpAstNumber][fnNode["children"][i if fnNode["type"] == "FunctionExpression" else i+1]]["value"]
                     subfunctionState.env_createLocal(parameterName)
                     subfunctionState.env_set(parameterName,tmpRet)
                     if tmpRet != None:
@@ -635,7 +651,7 @@ class history_extractor:
             
 
             # Execute the functions blockstatement (last child)
-            fnHist = self._analyseStatement(astNumber, fnNode["children"][-1], subfunctionState)
+            fnHist = self._analyseStatement(jmpAstNumber, fnNode["children"][-1], subfunctionState, recursionDepth + 1)
             hist.addHistoryCollection(fnHist)
             ret = subfunctionState.env_get("__return__")
             return hist, ret
@@ -656,7 +672,7 @@ class history_extractor:
                 hist = HistoryCollection()
                 ret = None
                 for i in curNode["children"]:
-                    tmpHist, ret = self._analyseExpression(astNumber, i, state)
+                    tmpHist, ret = self._analyseExpression(astNumber, i, state, recursionDepth)
                     hist.addHistoryCollection(tmpHist, state.get["__thisFunction__"])
                 return hist, ret
         elif t == "VariableDeclaration":
@@ -666,7 +682,7 @@ class history_extractor:
                 # Create the local variable
                 state.env_createLocal(declarator["value"])
                 if "children" in declarator:
-                    tmpHist, ret = self._analyseExpression(astNumber, declarator["children"][0], state)
+                    tmpHist, ret = self._analyseExpression(astNumber, declarator["children"][0], state, recursionDepth)
                     state.env_set(declarator["value"], state.getTarget(ret))
                     hist.addHistoryCollection(tmpHist)
             return hist, None
@@ -681,8 +697,10 @@ class history_extractor:
             return HistoryCollection(), None
 
         # For all other nodes, where no specific strategy has been assigned
+        elif t == "EmptyStatement":
+            return HistoryCollection(), None
         else:
-            raise NameError('NodeName not handled')
+            return HistoryCollection(), None
 
 
 
@@ -735,6 +753,7 @@ def prepare_files(astFilePath):
     asts = []
     for line in astFile:
         if len(line) > 1:
+            line = line.replace('?',"_HOLE_")
             asts.append(json.loads(line))
 
 
@@ -747,15 +766,17 @@ def prepare_files(astFilePath):
     jscodeLinePositions = []
     resultJscode = []
     for line in jscode.split("\n")[4:]:
-        if line.startswith("I0"):
+        if line.startswith("I0"): # A I0 line splits the multiple js position infos
             filteredJscode.append([])
             jscodeLinePositions.append([-1])
-        else:
+        elif len(filteredJscode) > 0: # Security for when no js code generated
+            # Replace before the counting of line length because callgraoh gets also edited function
+            line = line.replace('?',"_HOLE_")
             filteredJscode[-1].append(line)
             jscodeLinePositions[-1].append(jscodeLinePositions[-1][-1] + len(line) + 1) # add 1 for newline
     for i, program in enumerate(filteredJscode):
         resultJscode.append('\n'.join(program))
-        jscodeLinePositions[i][0] = 0
+        #jscodeLinePositions[i][0] = 0; Without more correct
 
     if (WriteCreatedJs):
         codeFile = open(astFilePath[:-5]+".js", "w+")
@@ -814,15 +835,22 @@ def prepare_files(astFilePath):
         caller, target = line.split(" -> ")
         callerAst = int(caller[0:caller.find("@")])
         callerPos = int(caller[caller.find(":")+1:caller.find("-") ])
-        if not callerPos in mapping[callerAst]:
+        if callerPos in mapping[callerAst]:
+            caller = mapping[callerAst][callerPos]
+        elif callerPos - 1 in mapping[callerAst]:  # There is sometimes a failing offset :(
+            caller = mapping[callerAst][callerPos - 1]
+        else:
             continue
-        caller = mapping[callerAst][ callerPos ]
+
         if "@" in target:
             targetAst = int(target[0:target.find("@")])
             targetPos = int(target[target.find(":")+1:target.find("-") ] )
-            if not targetPos in mapping[targetAst]:
+            if targetPos in mapping[targetAst]:
+                target = (targetAst, mapping[targetAst][targetPos])
+            elif targetPos-1 in mapping[targetAst]: # There is sometimes a failing offset :(
+                target = (targetAst, mapping[targetAst][targetPos-1])
+            else:
                 continue
-            target = (targetAst, mapping[targetAst][targetPos])
             mappedCallgraphs[callerAst][caller] = target
 
     return asts, mappedCallgraphs
@@ -895,7 +923,10 @@ if __name__ == "__main__":
     testFilePath = sys.argv[2]
 
     try:
-        histories, a, b, c, d = extract_histories(astFilePath, testFilePath, False)
+        if UseTestingCodejs:
+            histories, a, b, c, d = extract_histories(None, None, False)
+        else:
+            histories, a, b, c, d = extract_histories(astFilePath, testFilePath, len(sys.argv) > 3)
         print(histories)
     except Exception as e:
         eprint(str(e))

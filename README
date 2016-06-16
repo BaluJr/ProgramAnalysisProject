@@ -1,32 +1,48 @@
 Program Analysis and Synthesis, Spring 2016, ETH Zurich
-
-## Project: Deep Learning for Programs
 We provide two scripts 'suggest.sh' and 'extract_histories.sh' that will be used to test your solution. You should update both scripts by following the instructions provided inside them and include them in your submission.
 
-I just followed the basic project structure like downloaded from the PA site and added some more files:
-
-A) Python code for history extraction:
-extract_histories.py
-State.py
-HistoryCollection.py
-suggest.py
-
-B) Rubish bin for old code:
-RemvedCode.py
-
-C) Summary of the elements that might appear in histories:
-AvailableElementsofAST.txt
-
-D) Place for discussions:
-discussions.
+___________
+How to run the programs:
+extract_histories.sh:       If the file to predict has ? in the tree, you need to pass true as a third argument.
 
 
 
 
-I CHANGED THE JS-CALLGRAPH CODE sothat it immediatly reads the input from the argument instead !!!!
-So we avoid saving always another file when created by js_printer.
+___________
+IN THE FOLLOWING I DESCRIBE THE COMPONENTS OF THE PROJECT:
 
-The change made: In asutils.js arround line 100 exchange the function buildAST by the following function:
+A) The provided sh files:
+extract_histories.sh
+suggest.sh
+
+B) Preprocessing and Driver for generating the testhistories out of the huge files
+astDevider.py:  Splits the huge ast file into smaller ones, one per project
+astFeeder.py:   Runs the historyExtraction for each of the groups created by astDevider.py
+
+C) Python code for history extraction:
+extract_histories.py:       The main history extraction algorithm analysing the ast
+State.py:                   Class representing the program state
+HistoryCollection.py:       The class where the histories are collected and which finally renders the histories
+CustomExceptions.py:        Only some ExceptionClasses to allow better error handling
+
+D) The code for the prediction
+
+
+E) Various:
+AvailableElementsofAST.txt:     Summary of the elements that might appear in histories:
+discussions.txt:                Place for discussions:
+
+
+F) The folders tests_histories and tests_suggest have an own Readme for description of their content
+
+
+
+
+___________
+IMPORTANT: I CHANGED THE JS-CALLGRAPH CODE sothat it immediatly reads the input from the arguments!!!!
+Like this we avoid saving an aditional file just to pass the results of the js_printer to the callgraph.
+
+In asutils.js arround line 100 exchange the function buildAST by the following function:
     """ function buildAST(files) {
 	source = files[0]
         var ast = {

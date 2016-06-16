@@ -1,12 +1,79 @@
-//var root = document.createElement('div')
-//document.body.appendChild(root)
+// Handling anonymous functions including possibly anonymous local vars
+/*function A (tstObj) {
+    tstObj.X();
+    tstObj.Y();
+    tstFn(tstObj);
+}*/
+
+
+// Recursion safety
+/*obj = new Obj();
+function A (tstObj) {
+    tstObj.inner();
+    A(tstObj);
+}
+A(obj);*/
+
+// Merging of objects on heap is working
+/*function A() {
+a1 = new A();
+b1 = new B();
+c1 = new C();
+c1.operationForOnlyC1();
+a1.b = b1;
+b1.c = c1;
+a2 = new A();
+b2 = new B();
+b2.c = new C();
+b2.c.operationForOnlyC2();
+a1 = a2;
+// With steensgaard, at this position not only b and b2, but also c and c2 have to be merged
+a2.b = b2;
+// So this operation belongs to both C objects
+b2.c.TEST();
+};*/
+
+
+/* Complicated encapsulations are working
+function tstFn (para) {
+    para.blub();
+    innerFn(para);
+}
+for (var i = 1; i < 4; i++) {
+    a = new A();
+    c = (function (tst) {
+        tst.Bam();
+        for (cur in {"a":1, "b" : 2, "c" : 3}) {
+            f.Bam(null, tst);
+        };
+        var b = tst;
+        tstFn(b);
+        return b;
+    })(a)
+
+    if (true) {
+    c.GrandeFinale();
+    }
+}
+
+function innerFn(innerPara) {
+    if (i == 5) {
+    innerInnerFunction(null, innerPara);
+    }
+    else
+    {
+     innerInnerFunctionAlternative(innerPara);
+    }
+}*/
+
+
 
 //a = new x.google.y.Camera()
 //a.Open()
 //a.Close()
 
 
- //The original Testcode
+// The original Testcode
 //(function()  {
 //   var httpRequest;
 //   document.getElementById("ajaxButton").onclick = (function()  {
@@ -41,20 +108,7 @@
 //b.test()
 
 
-// Merging of objects on heap is working
-/*a1 = new A();
-b1 = new B();
-c1 = new C();
-a1.b = b1;
-b1.c = c1;
-a2 = new A();
-b2 = new B();
-b2.c = new C();
 
-a1 = a2;
-a2.b = b2
-
-b2.c.TEST();*/
 
 
 /*
@@ -102,4 +156,4 @@ if (True) {
     a = b
     a.optional2_2()
 }
-a.Test4()
+a.Test4()*/
