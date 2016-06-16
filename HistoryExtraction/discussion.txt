@@ -1,0 +1,236 @@
+This file shall be a place for writing down questions and thoughts:
+
+
+## Idea for handling the coupling of linked code: per group, put together,
+- which classes are used (can be taken from history)
+- which classes are globally modified or created (Capital first letter variables and things accessed by prototype!)
+- Global variables, that are unknown
+## Way to surround the combination of files
+- Handling elements more stupid and do not rely on objects
+
+
+
+
+ ################## PROBLEMS AND TODOS ####################:
+# -Cut away everything after the hole (cutAtHoles in getHistoriyStrings)
+#
+# -Include parameters as anonymous object
+#
+# -Recognize the jquery object
+#
+# Call in Call
+#
+# -Handling arrays -> General not like
+# -Handling ForIn -> like with arrays more or less Literal Handling!?
+#
+# -Break, Continue Statement
+# -Looking how to handle Return and historiy extension etc for recursive functions
+#  (because then check, whether last history element equals to state.functionName, makes problem
+
+# The javascript_call_graph project ignores underscores in variable names. Doesn't this may cause serious problems?
+# It regards calls to new XMLHttpRequest() but not to other not existing objects. How does the project know?
+
+# What to do about links in callgraph to default objects?
+
+# Handle the new js standard
+
+
+
+
+
+ ################## PAPER ARGUMENTS ####################
+
+- Handling loops: Loop are not executed at all but only the looping depth is written down for each instruction. That has two reasons. On the one hand 
+following loops leads to an exponential explosion of possible histories if there are conditional executions inside the loop. On the other hand the 
+concrete histories do not contain any additional information for us since during coding time, when the predictions are demanded, we do not have concrete histories either. 
+We only know that previous calls have been placed inside a loop. We believe that this approach is the best strategy to handle loops.
+
+- Steensgard Points-to-Analysis: The steensgard point-to-anylsis can be quite imprecise, since objects are joined from the analysis point of view, when 
+the same variable points to both of them. Nevertheless reusing the same variable for completly different objects can be regarded as a bad programming style 
+and the emergence of those cases should be rather limited.
+
+-Handling of arrays: Array are regarded as objects. 
+
+- Context-Insensitive: the code is handled context-insensitive. So if there are multiple variables with the same name, it is not our problem. 
+
+Environment env: local variables to reference values (Dictionary)
+
+- We started implementing the whole thing with a steensgaard points-to analysis using a UnionFind DataStructure. But when 
+it came to predicting the call methods I ask myself wether this is really helpfull???
+Because the callgraph method has to run a precise points-to analysis either way!?
+
+- Arrays are handled exactly like objects. This makes actually sense, since in Javascript they are 
+easily and implicitly convertible to objects
+
+- In the paper they pretend, that all merged steengaard "objects" have the same history. 
+ That is different within out approach, since we handle the histories for each object separately.
+ I have no clue how they want to merge the histories if they merge multiple objects.
+ Even for each distinct object of the same class. The histories are only afterwards mapped to
+ the corresponding classes. 
+ While the strategy described in the paper is nice for easier programs, it inherently prohibits the handling
+ of all code.  The great abstraction of merging together many objects causes a great loss of precision.
+
+ -Since in our work we are looking onto loops not by observing the program flow like 
+ described in the paper, we have more possibilities to predict program code. (Only taking the histories and
+ forgetting about that it was caused by a loop prevents that)
+
+ -Future work: Maybe a UnionLoolkup data structure!?
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ ################## STEENSGAARD ####################
+ # In this file all functionalities necessary to handle the points-to analysis are handled
+ # An explanation for myself
+
+
+# STEENSGAARD ANALYSIS:
+# A) STUKTUREN:
+# AHHH ich glaube ich habe jetzt verstanden warum es wichtig ist noch diese 
+# zus�tzliche Potenzmenge einzuf�hren!!!
+# a) Variablen v -> zeigen auf die Sets an Zieladressen, Bzw. sie SIND ein Set an Zieladressen.                     = Env: Dict mit Verweisen auf pts Menge
+# b) Sets an Zieladressen rho <- DIE werden als Returnvalue uebergeben                                              = Pts: Set mit objekten auf die 
+#    Ah und das ist auch notwendig weil ja nicht immer eine Variable auf so eine Gruppe zeigt!                             Verwiesen werden kann + Set
+#    Variablen sind ja nur ein Zugang zu diesen Strukturen.                                                                von Pts die hierauf verweisen
+# c) Das ist in der Pr�se keine Eigene Struktur, sondern nur eine Erkl�rng wie die                                         (notwendig weil bei zB. return
+#    Vars abgespeichert werden. Darum der Doppelpunkt.                                                                      Pts von variable entkoppelt
+#    => Er beh�llt eigene Mengen f�r jedes Powerset und merged die dann �ber das UnionFind pattern.                         wird)
+#       Aber das hilft mir irgendwie m��ig bei der richtigen Setbildung am Ende. Daher mal naiven Ansatz testen             Zeigen auf e � Obj
+#       mit 2 Sets: 1. Adressen pts auf die gezeigt wird; 2. dinge die auf pts zeigen 
+#    
+# x) Objekte mit Liste der m�glichen Histories Ahhh!                                                
+#    Das geh�rt ja nicht nicht zu Steensgaard Analysis. Das kommt auch nicht in Pr�se vor!                          =Obj: Die echten Objkte, bei denen
+#    Das brauche nur ich, da ich nicht nur das Pointing ziel wissen will, was bereits mit                                 Histories abgespeichert werden
+#    a-c affengeil geht, sondern eben auc die Histories f�r diese Ziele
+#    FALSCH!!!! Diese gibt es im Paper eben NICHT!!! DAS hatte ich falsch verstanden. Was wir in C haben ist 
+#    sofort auch was wir als Objekte verwenden. Dh die Objekte werden auch direkt zusammen gef�hrt.
+#    (Keine Ahnung wie man dann noch histories per Objekttyp realisieren m�chte.)
+#    Es kommt hier dann jedoch noch ein Heap ins Spiel, den es bei normalem Steensgaard nicht gibt. Hier wird 
+#    f�r jedes zusammengelegte Objekt f�r jeden Member gestgehalten auf welches zusammengelegte andere Objekt
+#    es zeigt. Hier eben vorsichtig sein mit der verbingung zwischen Paper und der Pr�se. Die Pr�se vereinfacht 
+#    hier zu sehr mit der Dereferenzierungs Abbildung.
+#
+#    Und allgemein zum Verst�ndnis: Wie man das im Paper lie�t, wir speichern das alles einfach alles als 
+#    mapping ab und eben nicht als Objekte.
+#    
+# B) IMPLEMENTATION
+# Referencing:           a = &b <>   a = new B()   =>  l_B � pts(a)
+## -> Simpel Adresse von B zu pts(a) hinzuf�gen
+# Aliasing:              a =  b <>   a = b         =>  pts(a) = pts(b)
+## -> Vereinen wo a und b drauf zeigen k�nnen (ab dem Moment f�r immer) / gerade ganz kurz Gedanke warum Datenstruktur
+## -> Ahh um das effizient zu machen brauchen wir wirklich diese eine Datenstruktur
+## -> Ahhhhh Genaaaau! Damit wir wissen, welches set an variablen s auf diese pts zeigt!
+# Dereferencing read:    a = *b <>   a = b.f       =>  Each l � pts(b): pts(a) = pts(l)
+## -> Ah dann auch klar! Auf alles auf das b zeigen kann, zeigen kann kann a jetzt drauf zeigen. Aber nicht auf b selbst. ^^
+## Eieieieie AHHH! Noch was klar: Man muss nicht sofort alle Referenzen aufbauen, sondern ja erst wenn auch welch gesetzt werden. Und dann eben als 
+## Ziel des ganzen Objektes.
+# Dereferencing write:  *a =  b <> a.f = b         =>  Each l � pts(a): pts(b) = pts(l)
+## -> Auch Ahaa!! Alles auf das a zeigen kann, muss jetzt auf b zeigen k�nnen :)
+# => Und DIE KANN ICH JETZT SOO UMSETZEN. :) :) :) ^^ :)
+#
+# C) CONCRETE IMPLEMENTATION TO UNDERSTAND WHY AND WHETHER DATASTRUCTURE
+# Der springende Punkt ist zB. die Pointer Analysis. Wenn ich hier a = b mache muss ich beide 
+# pts-Mengen mergen und beide Variablen auf das gleiche zeigen lassen. Das klappt auch noch, wenn a auf 
+# eine Zus�tzliche Variable zeigen kann. Dann auch b. 
+# -Bl�d w�rde es jetzt aber, wenn wir jetz b = c machen und die beiden Mengen gleichgesetzt werden. Weil dann
+#  m�ssen wir rausfinden, dass a auch auf pts(b) zeigt um auch a auf das neue Objekt zeigen zu lassen. 
+# - Genau das ist bei den Dereferencing Operation auch der Fall! Da werden ja auch Sets gleichgesetzt und 
+#  und wir m�ssen wissen welche Variablen alle auf das neue Objekt umgesetzt werden m�ssen.
+# Hm!
+#
+# => alles in allem nichts besonderes. W�re ich selbst drauf gekommen und dann h�tte ich mir auch nicht 
+# so lange gedanken gemacht. Ich merke wie es mir schwerer f�llt es blockiert, andere L�sungen zu verstehen 
+# vs. eigene Entwickeln. => Muss ich mal reflektieren.
+# Andere Sache: Das aufschreiben hilft sehr. Dadurch kann ich das gespr�ch mit einer anderen Person ersetzen. 
+#
+#
+#
+# WIE SIE IM PAPER DAS MACHEN:
+# Die Verwirrung ist eben, dass es nicht wirklich pointer gibt sondern nur objekte die felder haben, die wieder auf andere zeigen k�nnen.
+# Sie haben nur abstrakte Objekte, dh. alle Fields werden dann auch dem gesamten abstrakten Objekt zugeschrieben. 
+# (Bedenke: Kann nat�rlich davon ausgegangen werden, dass der Code richtig ist. Dh es ist eine Abstration, aber fehler k�nnen nicht passieren. 
+# 
+# Ich habe statt dessen ja noch richtige Objekte und lediglich points-to-mengen, die auf die Objekte zeigen.
+# Dh. L brauche ich eigentlich nicht. Es ist implizit dadurch gegeben, dass ich die eindeutigen Bezeichner habe. Wenn dieser Bezeichner
+# nicht mehr auftaucht ist das Objekt halt weg und seine History wird nicht mehr erweitert. 
+# Ich merke mir blo� 
+# -Env = l_env + g_env : Die Variablen und die Pts auf die sie zeigen
+# -Heap : F�r jedes Objekt (bzw. Array) f�r jede FieldId die auf etwas zeigt. Die Pts menge
+# -Pts : Set an Objektnamen, die in Frage kommen.
+#
+# Wir wissen hinterher nach der Vereinigung eh nicht mehr auf welches Objekt das Event bezogen ist. Wir m�ssen es daher allen zur Verf�gung stellen. 
+# => Der Komplexe Fall der jetzt wieder entsteht ist, wenn wir eine Zuweisung in einer Chose haben. Dann entstehen 2 versch. Possible histories.
+#
+# Ansatz f�r histories: Wenn zusammengelegt wird in der Start history markieren wo es weiter geht und f�r das Abstrakte objekt eine eigene History beginnen.
+# Das muss ich gerade weiter spinnen: Dann kann ich hinterher bei den einzelobjekten anfangen und die histories durchlaufen bis zum Ende wobei ich dann wenn
+# es zu aliasing kommt eben durch die Histories der Abstrakten Objekte laufe. 
+#
+# Kurzes vest�ndnis was zur prediction gebraucht wird: DAS ist ein guter Ansatz
+# Wir nehmen hinterher S�tze und schauen auf die Wort reihenfolge. Die reihenfolge die am h�ufigsten ist dann auch am Wahrscheinlichsten.
+# Abstrahieren wir nun (wir merken uns f�r jedes abstrakte Objekt welche konkreten Objekte enthalten sind.) bekommt ein Objekt nat�rlich falsche 
+# histories zugeordnet. Dies sollte aber bedeutend seltener und mit wechselnden partnern passieren, sodass die korrekte verwendung im Schnit noch 
+# hervorstechen sollte. 
+# 
+#
+a = A();
+b = B();
+a.test1();
+b.test2();
+# Ob man innerhalb eines If ist darf keinen unterschied machen. Sonst k�me alles durcheinander. Wenn m�ssen alle Unklarheiten 
+# beim mergen geloest werden. Und wenn das nicht geht kann ich es ganz vergessen! Normal m�sste ich eine DeepCopy der g_env, l_env und des heap uebergeben.
+if (dontknow):  # Create history und f�ge der anderen hinzu
+    a.test3();  # Create another history for the then-case -> Solange wie es noch kein merging gibt, normal ausf�hren, Wenn es zu aliasing kommt
+    a = b;      #
+    b.test4();
+else:
+    a.test5();
+# Brauchen eine Merge State Function. Diese muss die Ausf�hrungsstr�nge zur abstraktesten Version mergen.!!!
+
+b.bam(); # <- Das wird auf jeden Fall schon auf die neue gemergede history angewendet.
+# => nach dem alten Schema h�tte ich hier jetzt einfach je 2 histories f�r a und b.
+
+# Die gr��te Frage ist jetzt wie man das konkret bei Cases umsetzt:
+# -F�r normale lineare ausf�hrung ist es einfach. Lediglich beim Moment des zusammenlegens eine neue History f�r das abstrakte Objekt anlegen.
+# -Jetzt muss man �berlegen wie man das mache, wenn es in einer Conditional Situation passiert. Das das zusammenlegen erlaubt ist ist keine Frage
+#  Da es hier lediglich um Pr�zisionsverlust geht, ist das auch legitim wenn es in der conditional Abfrage passiert und ich trotzdem zusammen lege. 
+#  Ist in so einem Fall ja auch einfach awkyard programmiert.
+#  Aber die Umsetzung ist trotzdem ein Problem. Ich muss mich ja festlegen, ob ich hinterher oder vorher merge. Bzw. wie!? 
+
+# Ah ok! Das einfache r�berkopieren ist nicht m�glich, da ja auch noch was im Nachhinein in b flie�t bei a ankommen muss.
+# Ist das so?
+
+# => => => => => 
+# ALSO Fazit des ganzen (und das ist trauriger Weise auch worauf sie gekommen sind):
+# Objectsmenge L            -> ISt einfach nur die eindeutige ObjectID
+# Einen Heap mit rumreichen -> Doppeltverschachteltes Dictionary: "ObjektID": "Field" : ObjectID
+# Ein Env Objekt            -> Einfaches Dictionary               "Variablename" : ObjectID
+# Eine HistoryCollection    -> F�r jedes Objekt die History (Dabei haben konkrete Objekte eine history und eben auch abstrakte. In einer History wird 
+#                              immer angegeben mit welcher History es weiter geht. So kann man am ende die Finale history erstellen.
+# => Env und Heap werden mit rumgereicht. History kommen ja als ergebnis zur�ck. 
+# Die Objektmenge wird durch die eindeutigen IDs implizit verwaltet. Ist dann mehr ein globales Dictionary mit einem counter f�r jeden Klassentypen.
+#
+# F�r lineare ausf�hrung klappt das ganze so schon wunderbar. Es braucht noch die Implementierung der Objektzusammenfassung. 
+# Sollte aber Straight-forward sein. Diese Funktion muss gekapselt sein: da sie aus verschiedenen situationen n�tzlich! 
+#
+# Dann braucht es noch eine erweiterte MergingFunktion f�r das merging von alternativen Ausf�hrungspfaden, 
+# wie es das momentan schon f�r die Histories gibt erweitet: 
+# Env:          Die allgemeinste Version die machbar ist. Wenn same variable onto different objekts -> Mergen der Objekte
+# Heap:         Take the most abstracted version. So if a = b in "then" and b = c in "else", then merge all three afterwards. Since these are sets it 
+#               does not matter if b is implicitly two times merged into the resulting set.
+# Histories:    Hier �berdenke ich die Struktur noch einmal und anstatt fertig zusammengestellte histories zu haben verlinke ich nur untereinander.
+#               Die Kombinationen ergeben sich dann hinterher beim zusammenbau. Beim mergen kann ich dann einfach beide Pfade parallel anh�ngen und 
+#               anschlie�end die gemergede version anh�ngen f�r den weiteren verlauf. Beim zusammenbau bekomme ich das dann sauber rekonstruiert.
+#               Pr�zision geht auf diese weise erst verloren wo n�tig. :)
+#

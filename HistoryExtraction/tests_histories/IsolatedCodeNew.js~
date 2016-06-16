@@ -1,0 +1,4 @@
+a = function() {alert("test")}
+
+Test = { tst: function() {alert("test")}}
+Test.tst();

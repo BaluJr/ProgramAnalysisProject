@@ -1,0 +1,66 @@
+Program Analysis and Synthesis, Spring 2016, ETH Zurich
+We provide two scripts 'suggest.sh' and 'extract_histories.sh' that will be used to test your solution. You should update both scripts by following the instructions provided inside them and include them in your submission.
+
+___________
+How to run the programs:
+extract_histories.sh:       If the file to predict has ? in the tree, you need to pass true as a third argument.
+
+
+
+
+___________
+IN THE FOLLOWING I DESCRIBE THE COMPONENTS OF THE PROJECT:
+
+A) The provided sh files:
+extract_histories.sh
+suggest.sh
+
+B) Preprocessing and Driver for generating the testhistories out of the huge files
+astDevider.py:  Splits the huge ast file into smaller ones, one per project
+astFeeder.py:   Runs the historyExtraction for each of the groups created by astDevider.py
+
+C) Python code for history extraction:
+extract_histories.py:       The main history extraction algorithm analysing the ast
+State.py:                   Class representing the program state
+HistoryCollection.py:       The class where the histories are collected and which finally renders the histories
+CustomExceptions.py:        Only some ExceptionClasses to allow better error handling
+
+D) The code for the prediction
+
+
+E) Various:
+AvailableElementsofAST.txt:     Summary of the elements that might appear in histories:
+discussions.txt:                Place for discussions:
+
+
+F) The folders tests_histories and tests_suggest have an own Readme for description of their content
+
+
+
+
+___________
+IMPORTANT: I CHANGED THE JS-CALLGRAPH CODE sothat it immediatly reads the input from the arguments!!!!
+Like this we avoid saving an aditional file just to pass the results of the js_printer to the callgraph.
+
+In asutils.js arround line 100 exchange the function buildAST by the following function:
+    """ function buildAST(files) {
+	source = files[0]
+        var ast = {
+            type: 'ProgramCollection',
+            programs: [],
+            attr: {}
+        };
+        //sources.forEach(function (source) {
+            var prog = esprima.parse(source, { loc: true, range: true });
+            prog.attr = { filename: "inputfile", sloc : sloc(source, "javascript").sloc};
+            ast.programs.push(prog);
+        //});
+        init(ast);
+        ast.attr.sloc = ast.programs
+            .map(function(program){
+                return program.attr.sloc;
+            }).reduce(function(previous, current) {
+            return previous + current;
+        });
+        return ast;
+    } """
