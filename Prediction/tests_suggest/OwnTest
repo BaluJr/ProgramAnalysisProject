@@ -1,0 +1,4 @@
+<ObjectExpression> <quantity,0,0,ic> <quantity,0,0,-> <price,0,0,ic>
+<ObjectExpression> <quantity,0,0,ic> <price,0,0,ic> <price,0,0,-> 
+<ObjectExpression> <quantity,0,0,ic> <quantity,0,0,-> <price,0,0,ic> 
+<ObjectExpression> <quantity,0,0,ic> 
