@@ -29,4 +29,4 @@ fi
 
 
 # Run your analysis and produce output as defined above
-python ./HistoryExtraction/extract_histories.py $1 $2
+python3 .Prediction/HistoryExtraction/extract_histories.py $1 $2

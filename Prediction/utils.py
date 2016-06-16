@@ -17,14 +17,14 @@ SENTENCE_START_TOKEN = "SENTENCE_START"
 SENTENCE_END_TOKEN = "SENTENCE_END"
 UNKNOWN_TOKEN = "UNKNOWN_TOKEN"
 
-def load_data(filename="../data/samples/Histories.txt", vocabulary_size=1000, min_sent_characters=0):
+def load_data(filename="tests_suggest/OwnHistories.txt", vocabulary_size=1000, min_sent_characters=0):
 
     word_to_index = []
     index_to_word = []
     tknzr = TweetTokenizer()
     # Read the data and append SENTENCE_START and SENTENCE_END tokens
     print "Reading txt file..."
-    with open('../data/samples/Histories.txt', 'rb') as f:
+    with open(filename, 'rb') as f:
         reader = f.readlines()
         # Split full comments into sentences
         sentences = itertools.chain(*[nltk.sent_tokenize(x.decode("utf-8")) for x in reader])

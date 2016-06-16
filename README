@@ -27,6 +27,7 @@ Leads to:
 <0><57>   <onreadystatechange,0,0,-> <open,0,0,-> <send,0,0,-> 
 <0><50>   <onreadystatechange,0,0,-> <open,0,0,-> <send,0,0,-> 
 
+-Example 2
 
 
 > Howto run suggest.sh:

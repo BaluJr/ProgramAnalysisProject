@@ -1,11 +1,12 @@
 from __future__ import print_function
-from subprocess import Popen, PIPE
-import sys, getopt
+
 import json
-from State import State
+import sys
+from subprocess import Popen, PIPE
+
 import CustomExceptions
 from HistoryCollection import HistoryCollection
-
+from State import State
 
 # Global flags for debugging purposes
 # Process the code in /tests_histoires/TestingCode.js instead of the given AST. For debugging.
@@ -895,7 +896,7 @@ def extract_histories(astsFilePath, testsFilePath = None, testOnHoles = False):
     # Get the histories (format depends, on wheter testsFilePath given or not)
     tests = None
     if testsFilePath != None:
-        tests = open(testFilePath, "r").read().split("\n")
+        tests = open(testsFilePath, "r").read().split("\n")
     historiesString = hist_extractor.getHistoryString(tests, testOnHoles)
     return historiesString, protos, uses, offered, unknowns
 
@@ -909,6 +910,7 @@ def extract_histories(astsFilePath, testsFilePath = None, testOnHoles = False):
 def eprint(*args, **kwargs):
     """ Help function to print to stderror stream instead stdout """
     print(*args, file=sys.stderr, **kwargs)
+
 
 
 if __name__ == "__main__":
