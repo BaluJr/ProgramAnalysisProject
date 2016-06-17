@@ -9,7 +9,7 @@ from HistoryExtraction.extract_histories import extract_histories
 
 from nltk.tokenize import TweetTokenizer
 
-def predict_next(searchtext, frequency_list, dict_idx):
+def predict_next(ast_num, hole_pos, searchtext, frequency_list, dict_idx):
     searchtokens = tuple(searchtext)
     elem,count = zip(*frequency_list[dict_idx[searchtokens] - 1])
     res_idx = np.array(heapq.nlargest(5, range(len(count)), key=lambda x: count[x]))
@@ -19,7 +19,7 @@ def predict_next(searchtext, frequency_list, dict_idx):
     # print count[res_idx]
     prob = count[res_idx]/(1.*np.sum(count))
     for i in range(len(prob)):
-        print(i+1, res[i], prob[i])
+        print(ast_num, hole_pos, i+1, res[i], prob[i])
 
 
 
@@ -40,7 +40,7 @@ if __name__ == "__main__":
             histories[i] = history[:history.rfind(">", 0, history.find("_HOLE_")) + 1]
 
         t0 = time.time()
-        f = open(astFilePath)
+        f = open('fullHist.hist')
         raw = f.read()
 
         tknzr = TweetTokenizer()
@@ -72,27 +72,15 @@ if __name__ == "__main__":
         print(time.time() - t0)
 
 
-
-        #with open(testFilePath, 'rb') as f:
-        #    reader = f.readlines()
-        #    sentences = itertools.chain(*[nltk.sent_tokenize(x.decode("utf-8")) for x in reader])
-
-
-        # Get the positions for printout
-        positions = []
-        with open(testFilePath, 'rb'):
-            for line in testFilePath:
-                positions.append(line.split(" "))
-
-
-
-        for sent in sentences:
+        for history in histories:
             # print sent
-            word_tokens = tknzr.tokenize(sent)
+            word_tokens = tknzr.tokenize(history)
             hole_sentence = []
+            ast_num = word_tokens[0]
+            hole_pos = word_tokens[1]
             for i in range(2):
                 hole_sentence.append(word_tokens[len(word_tokens)-2+i])
-            predict_next(hole_sentence, frequency_list, dict_idx)
+            predict_next(ast_num, hole_pos, hole_sentence, frequency_list, dict_idx)
 
 
     except Exception as e:
