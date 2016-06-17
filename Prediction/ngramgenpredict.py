@@ -6,8 +6,11 @@ import time
 import heapq
 import sys
 from HistoryExtraction.extract_histories import extract_histories
-
+import os
 from nltk.tokenize import TweetTokenizer
+import pickle
+
+LOCAL_PATH = os.path.dirname(__file__)
 
 def predict_next(ast_num, hole_pos, searchtext, frequency_list, dict_idx):
     searchtokens = tuple(searchtext)
@@ -22,6 +25,17 @@ def predict_next(ast_num, hole_pos, searchtext, frequency_list, dict_idx):
         print(ast_num, hole_pos, i+1, res[i], prob[i])
 
 
+def bugfixForTokenizer (lst):
+    ''' The tokenizer has a strange bug,
+        that he does not handle the number 3 properly.'''
+    correctedList = []
+    for cur in lst:
+        if not cur.startswith("<"):
+            correctedList[-1] = correctedList[-1] + cur
+        else:
+            correctedList.append(cur)
+    return correctedList
+
 
 def eprint(*args, **kwargs):
     """ Help function to print to stderror stream instead stdout """
@@ -35,17 +49,49 @@ if __name__ == "__main__":
     try:
         # Get the histories and cut away everything after the _HOLE_
         histories = extract_histories(astFilePath, testFilePath, testOnHoles = True);
-        histories = histories[0].split("\n") #Remember also environment infos given from 1 to 4
+        histories = histories[0].split("\n")[:-1] #Remember also environment infos given from 1 to 4, remove empty line
         for i, history in enumerate(histories):
             histories[i] = history[:history.rfind(">", 0, history.find("_HOLE_")) + 1]
 
         t0 = time.time()
-        f = open('fullHist.hist')
-        raw = f.read()
 
+        # Currently the VM is quiete slow when accessing the HDD. It is not sure, whether it is faster to prozcess
+        # tokens again or to deserialize the pickle file.
+        # When model already available load it
+        # if os.path.isfile(LOCAL_PATH + '/TrainedNetworks/ngramTokens.pkl') and os.path.isfile(LOCAL_PATH + '/TrainedNetworks/ngramTokens1.pkl'):
+        #    print ("Available")
+        #    pkl_file = open(LOCAL_PATH + '/TrainedNetworks/ngramTokens.pkl', 'rb')
+        #    tokens = pickle.load(pkl_file)
+        #    pkl_file.close()
+        #    pkl_file = open(LOCAL_PATH + '/TrainedNetworks/ngramTokens1.pkl', 'rb')
+        #    tokens1 = pickle.load(pkl_file)
+        #    pkl_file.close()
+        #
+        # # When model not yet available calculate and store it
+        # else:
+        #
+        #     f = open(LOCAL_PATH + '/fullHist.hist')
+        #     raw = f.read()
+        #     tknzr = TweetTokenizer()
+        #     tokens1 = tknzr.tokenize(raw)
+        #     #tokens1 = bugfixForTokenizer(tokens1)
+        #     tokens = nltk.word_tokenize(raw)
+        #     #tokens = bugfixForTokenizer(tokens)
+        #
+        #     output = open( LOCAL_PATH + '/TrainedNetworks/ngramTokens.pkl', 'w+')
+        #     pickle.dump(tokens, output, -1)
+        #     output.close()
+        #     output = open(LOCAL_PATH + '/TrainedNetworks/ngramTokens1.pkl', 'w+')
+        #     pickle.dump(tokens1, output, -1)
+        #     output.close()
+
+        f = open(LOCAL_PATH + '/fullHist.hist')
+        raw = f.read()
         tknzr = TweetTokenizer()
         tokens1 = tknzr.tokenize(raw)
+        #tokens1 = bugfixForTokenizer(tokens1)
         tokens = nltk.word_tokenize(raw)
+        #tokens = bugfixForTokenizer(tokens)
 
         # Creation of trigrams
         trigs = nltk.trigrams(tokens1)
@@ -75,12 +121,17 @@ if __name__ == "__main__":
         for history in histories:
             # print sent
             word_tokens = tknzr.tokenize(history)
+            word_tokens = bugfixForTokenizer(word_tokens)
             hole_sentence = []
             ast_num = word_tokens[0]
             hole_pos = word_tokens[1]
-            for i in range(2):
-                hole_sentence.append(word_tokens[len(word_tokens)-2+i])
-            predict_next(ast_num, hole_pos, hole_sentence, frequency_list, dict_idx)
+            try:
+                for i in range(2):
+                    hole_sentence.append(word_tokens[len(word_tokens)-2+i])
+                predict_next(ast_num, hole_pos, hole_sentence, frequency_list, dict_idx)
+                print("\n")
+            except Exception as e:
+                eprint("History for <" + str(ast_num) + "><" + str(hole_pos) + "> too short.")
 
 
     except Exception as e:
